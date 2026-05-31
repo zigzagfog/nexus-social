@@ -1,55 +1,61 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { getSessionToken } from "./auth";
 
-const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
-
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-}
+// On Vercel (and locally), the frontend and API are served from the same domain.
+// All API calls use plain relative /api/ paths — no proxy URL needed.
+const API_BASE = "";
 
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  body?: unknown,
 ): Promise<Response> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-  });
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  await throwIfResNotOk(res);
-  return res;
+  // Send in-memory token as Bearer when available.
+  const token = getSessionToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return fetch(`${API_BASE}${url}`, {
+    method,
+    headers,
+    credentials: "include",
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
 }
 
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(`${API_BASE}${queryKey.join("/")}`);
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+async function defaultQueryFn({ queryKey }: { queryKey: readonly unknown[] }) {
+  const [url, ...params] = queryKey as string[];
+  let fullUrl = url;
+  if (params.length > 0 && typeof params[0] === "string") {
+    fullUrl = `${url}/${params[0]}`;
+  }
+  const res = await apiRequest("GET", fullUrl);
+  // Read body once as text — prevents "body stream already read" errors
+  const text = await res.text();
+  if (!res.ok) {
+    if (text.trimStart().startsWith("<")) {
+      throw new Error("Server error — please try again.");
     }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+    try { throw new Error(JSON.parse(text).error || res.statusText); }
+    catch { throw new Error(text || res.statusText); }
+  }
+  if (text.trimStart().startsWith("<")) {
+    throw new Error("Server error — please try again.");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
-    },
-    mutations: {
+      queryFn: defaultQueryFn,
+      staleTime: 30_000,
       retry: false,
     },
   },
