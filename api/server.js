@@ -29555,9 +29555,9 @@ var SQLiteTransaction = class extends BaseSQLiteDatabase {
 
 // node_modules/drizzle-orm/libsql/session.js
 var LibSQLSession = class _LibSQLSession extends SQLiteSession {
-  constructor(client2, dialect, schema, options, tx) {
+  constructor(client, dialect, schema, options, tx) {
     super(dialect);
-    this.client = client2;
+    this.client = client;
     this.schema = schema;
     this.options = options;
     this.tx = tx;
@@ -29652,9 +29652,9 @@ var LibSQLTransaction = class _LibSQLTransaction extends SQLiteTransaction {
   }
 };
 var LibSQLPreparedQuery = class extends SQLitePreparedQuery {
-  constructor(client2, query, logger, cache, queryMetadata, cacheConfig, fields, tx, executeMethod, _isResponseInArrayMode, customResultMapper) {
+  constructor(client, query, logger, cache, queryMetadata, cacheConfig, fields, tx, executeMethod, _isResponseInArrayMode, customResultMapper) {
     super("async", executeMethod, query, cache, queryMetadata, cacheConfig);
-    this.client = client2;
+    this.client = client;
     this.logger = logger;
     this.fields = fields;
     this.tx = tx;
@@ -29673,13 +29673,13 @@ var LibSQLPreparedQuery = class extends SQLitePreparedQuery {
     });
   }
   async all(placeholderValues) {
-    const { fields, logger, query, tx, client: client2, customResultMapper } = this;
+    const { fields, logger, query, tx, client, customResultMapper } = this;
     if (!fields && !customResultMapper) {
       const params = fillPlaceholders(query.params, placeholderValues ?? {});
       logger.logQuery(query.sql, params);
       return await this.queryWithCache(query.sql, params, async () => {
         const stmt = { sql: query.sql, args: params };
-        return (tx ? tx.execute(stmt) : client2.execute(stmt)).then(({ rows: rows2 }) => this.mapAllResult(rows2));
+        return (tx ? tx.execute(stmt) : client.execute(stmt)).then(({ rows: rows2 }) => this.mapAllResult(rows2));
       });
     }
     const rows = await this.values(placeholderValues);
@@ -29704,13 +29704,13 @@ var LibSQLPreparedQuery = class extends SQLitePreparedQuery {
     });
   }
   async get(placeholderValues) {
-    const { fields, logger, query, tx, client: client2, customResultMapper } = this;
+    const { fields, logger, query, tx, client, customResultMapper } = this;
     if (!fields && !customResultMapper) {
       const params = fillPlaceholders(query.params, placeholderValues ?? {});
       logger.logQuery(query.sql, params);
       return await this.queryWithCache(query.sql, params, async () => {
         const stmt = { sql: query.sql, args: params };
-        return (tx ? tx.execute(stmt) : client2.execute(stmt)).then(({ rows: rows2 }) => this.mapGetResult(rows2));
+        return (tx ? tx.execute(stmt) : client.execute(stmt)).then(({ rows: rows2 }) => this.mapGetResult(rows2));
       });
     }
     const rows = await this.values(placeholderValues);
@@ -29780,7 +29780,7 @@ var LibSQLDatabase = class extends BaseSQLiteDatabase {
     return this.session.batch(batch);
   }
 };
-function construct(client2, config = {}) {
+function construct(client, config = {}) {
   const dialect = new SQLiteAsyncDialect({ casing: config.casing });
   let logger;
   if (config.logger === true) {
@@ -29800,9 +29800,9 @@ function construct(client2, config = {}) {
       tableNamesMap: tablesConfig.tableNamesMap
     };
   }
-  const session = new LibSQLSession(client2, dialect, schema, { logger, cache: config.cache }, void 0);
+  const session = new LibSQLSession(client, dialect, schema, { logger, cache: config.cache }, void 0);
   const db2 = new LibSQLDatabase("async", dialect, session, schema);
-  db2.$client = client2;
+  db2.$client = client;
   db2.$cache = config.cache;
   if (db2.$cache) {
     db2.$cache["invalidate"] = config.cache?.onMutate;
@@ -29819,8 +29819,8 @@ function drizzle(...params) {
     return construct(instance, params[1]);
   }
   if (isConfig(params[0])) {
-    const { connection, client: client2, ...drizzleConfig } = params[0];
-    if (client2) return construct(client2, drizzleConfig);
+    const { connection, client, ...drizzleConfig } = params[0];
+    if (client) return construct(client, drizzleConfig);
     const instance = typeof connection === "string" ? (0, import_web.createClient)({ url: connection }) : (0, import_web.createClient)(connection);
     return construct(instance, drizzleConfig);
   }
@@ -34218,18 +34218,27 @@ var sessions = sqliteTable("sessions", {
 var insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
 
 // server/storage.ts
-var tursoUrl = process.env.TURSO_DATABASE_URL;
-var tursoToken = process.env.TURSO_AUTH_TOKEN;
-if (!tursoUrl) {
-  throw new Error(
-    "TURSO_DATABASE_URL is not set. Please set it to your Turso database URL."
-  );
+var _client = null;
+var _db = null;
+function getDb() {
+  if (!_db) {
+    const tursoUrl = process.env.TURSO_DATABASE_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN;
+    if (!tursoUrl) {
+      throw new Error(
+        "TURSO_DATABASE_URL is not set. Please set TURSO_DATABASE_URL in Vercel environment variables."
+      );
+    }
+    _client = (0, import_web3.createClient)({ url: tursoUrl, authToken: tursoToken });
+    _db = drizzle(_client);
+  }
+  return _db;
 }
-var client = (0, import_web3.createClient)({
-  url: tursoUrl,
-  authToken: tursoToken
+var db = new Proxy({}, {
+  get(_target, prop) {
+    return getDb()[prop];
+  }
 });
-var db = drizzle(client);
 async function initTables() {
   const stmts = [
     `CREATE TABLE IF NOT EXISTS users (
@@ -34304,6 +34313,7 @@ async function initTables() {
       created_at TEXT NOT NULL
     )`
   ];
+  const client = _client ?? (getDb(), _client);
   for (const stmt of stmts) {
     await client.execute(stmt);
   }

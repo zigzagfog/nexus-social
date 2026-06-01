@@ -17,24 +17,34 @@ import {
   type SecurityEvent, type InsertSecurityEvent,
 } from "@shared/schema";
 
-// ─── DB connection ────────────────────────────────────────────────────────────
-// In production (Vercel): TURSO_DATABASE_URL + TURSO_AUTH_TOKEN must be set.
-// In development (local): falls back to a local SQLite file via libsql.
-const tursoUrl = process.env.TURSO_DATABASE_URL;
-const tursoToken = process.env.TURSO_AUTH_TOKEN;
+// ─── DB connection (lazy) ────────────────────────────────────────────────────
+// Lazy initialization: the client is created on first use, not at module load.
+// This is critical for Vercel serverless — env vars are available at request
+// time, and deferring initialization avoids module-load-time failures.
+let _client: ReturnType<typeof createClient> | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
-if (!tursoUrl) {
-  throw new Error(
-    "TURSO_DATABASE_URL is not set. Please set it to your Turso database URL."
-  );
+function getDb(): ReturnType<typeof drizzle> {
+  if (!_db) {
+    const tursoUrl = process.env.TURSO_DATABASE_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN;
+    if (!tursoUrl) {
+      throw new Error(
+        "TURSO_DATABASE_URL is not set. Please set TURSO_DATABASE_URL in Vercel environment variables."
+      );
+    }
+    _client = createClient({ url: tursoUrl, authToken: tursoToken });
+    _db = drizzle(_client);
+  }
+  return _db;
 }
 
-const client = createClient({
-  url: tursoUrl,
-  authToken: tursoToken,
+// Convenience alias
+const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop];
+  },
 });
-
-const db = drizzle(client);
 
 // ─── Init tables ─────────────────────────────────────────────────────────────
 // We run CREATE TABLE IF NOT EXISTS via raw SQL so the app bootstraps itself
@@ -113,6 +123,8 @@ async function initTables() {
       created_at TEXT NOT NULL
     )`,
   ];
+  // Ensure DB is initialized before running table creation
+  const client = _client ?? (getDb(), _client!);
   for (const stmt of stmts) {
     await client.execute(stmt);
   }
