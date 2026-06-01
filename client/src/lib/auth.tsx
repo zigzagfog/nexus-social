@@ -49,7 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    apiRequest("GET", "/api/auth/me")
+    // 5-second timeout — if the API never responds (Vercel cold start hang),
+    // we still show the app instead of spinning forever.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    fetch("/api/auth/me", {
+      headers: _sessionToken ? { Authorization: `Bearer ${_sessionToken}` } : {},
+      signal: controller.signal,
+    })
       .then(async (res) => {
         if (res.ok) {
           const data = parseJSON(await res.text());
@@ -58,8 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(safeUser);
         }
       })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        // Timeout or network error — just show the app unauthenticated
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        setIsLoading(false);
+      });
   }, []);
 
   const login = async (email: string, password: string) => {

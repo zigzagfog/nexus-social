@@ -34229,7 +34229,8 @@ function getDb() {
         "TURSO_DATABASE_URL is not set. Please set TURSO_DATABASE_URL in Vercel environment variables."
       );
     }
-    _client = (0, import_http3.createClient)({ url: tursoUrl, authToken: tursoToken });
+    const cleanUrl = tursoUrl.trim();
+    _client = (0, import_http3.createClient)({ url: cleanUrl, authToken: tursoToken?.trim() });
     _db = drizzle(_client);
   }
   return _db;
@@ -34316,7 +34317,9 @@ async function initTables() {
   const client = _client ?? (getDb(), _client);
   await client.batch(stmts.map((sql2) => ({ sql: sql2 })));
 }
-var dbReady = initTables();
+var dbReady = initTables().catch((err) => {
+  console.warn("[storage] initTables warning (non-fatal):", err?.message ?? err);
+});
 var storage = {
   // ── Users ──────────────────────────────────────────────────────────────────
   async createUser(data) {
@@ -34574,7 +34577,6 @@ async function enrichPost(post, userId) {
   };
 }
 async function registerRoutes(httpServer, app) {
-  await dbReady;
   app.post("/api/auth/register", async (req, res) => {
     const ip = getClientIp(req);
     const ua = String(req.headers["user-agent"] ?? "");
@@ -35131,6 +35133,46 @@ async function registerRoutes(httpServer, app) {
       console.error("Security events error:", err);
       res.status(500).json({ error: "Failed to load security events" });
     }
+  });
+  app.use((err, req, res, _next) => {
+    const ip = getClientIp(req);
+    const ua = String(req.headers["user-agent"] ?? "");
+    const status = err?.status ?? err?.statusCode ?? 500;
+    const message = err?.message ?? "Internal server error";
+    console.error(`[EXCEPTION] ${req.method} ${req.path} \u2192 ${status}: ${message} | IP=${ip}`);
+    if (status >= 400) {
+      storage.logSecurityEvent({
+        targetUserId: req.user?.id ?? null,
+        claimedToken: null,
+        presentedCredential: null,
+        eventType: "exception",
+        severity: status >= 500 ? "high" : "medium",
+        ipAddress: ip,
+        userAgent: ua,
+        detail: `Unhandled error on ${req.method} ${req.path}: [${status}] ${message}`,
+        blocked: 0
+      }).catch(() => {
+      });
+    }
+    res.status(status).json({ error: message });
+  });
+  app.all("/api/*path", (req, res) => {
+    const ip = getClientIp(req);
+    const ua = String(req.headers["user-agent"] ?? "");
+    console.warn(`[SECURITY] Unknown API route probed: ${req.method} ${req.path} | IP=${ip}`);
+    storage.logSecurityEvent({
+      targetUserId: null,
+      claimedToken: req.headers.authorization?.replace("Bearer ", "").slice(0, 16) + "\u2026" || null,
+      presentedCredential: null,
+      eventType: "unknown_route",
+      severity: "low",
+      ipAddress: ip,
+      userAgent: ua,
+      detail: `Unknown API endpoint probed: ${req.method} ${req.path}. Body keys: ${Object.keys(req.body ?? {}).join(", ") || "none"}`,
+      blocked: 1
+    }).catch(() => {
+    });
+    res.status(404).json({ error: "Not found" });
   });
 }
 

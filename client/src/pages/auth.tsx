@@ -5,10 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { SecurityAlert, classifyError, type SecurityAlertType } from "@/components/security-alert";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
+  const [securityAlert, setSecurityAlert] = useState<{
+    type: SecurityAlertType;
+    message: string;
+  } | null>(null);
+
   const { login, register } = useAuth();
   const { toast } = useToast();
 
@@ -19,14 +25,28 @@ export default function AuthPage() {
   const [regName, setRegName]         = useState("");
   const [regEmail, setRegEmail]       = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [regConfirm, setRegConfirm]   = useState("");
+
+  // Clear security alert when switching modes
+  const switchMode = (m: "login" | "register") => {
+    setMode(m);
+    setSecurityAlert(null);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSecurityAlert(null);
     setLoading(true);
     try {
       await login(loginEmail, loginPassword);
     } catch (err: any) {
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+      // Check if this is a security-classified error
+      const classified = classifyError(err);
+      if (classified) {
+        setSecurityAlert(classified);
+      } else {
+        toast({ title: "Sign in failed", description: err.message, variant: "destructive" });
+      }
     } finally {
       setLoading(false);
     }
@@ -34,25 +54,42 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regUsername || !regName || !regEmail || !regPassword)
-      return toast({ title: "All fields required", variant: "destructive" });
-    // Basic email format check — avoids browser native validation stream errors
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail))
-      return toast({ title: "Enter a valid email address", variant: "destructive" });
-    if (regPassword.length < 6)
-      return toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+    setSecurityAlert(null);
+
+    // Frontend validation
+    if (!regUsername || !regName || !regEmail || !regPassword) {
+      toast({ title: "All fields required", variant: "destructive" });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)) {
+      toast({ title: "Enter a valid email address", variant: "destructive" });
+      return;
+    }
+    if (regPassword.length < 6) {
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    if (regPassword !== regConfirm) {
+      toast({ title: "Passwords don't match", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
     try {
       await register(regUsername, regName, regEmail, regPassword);
     } catch (err: any) {
-      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+      const classified = classifyError(err);
+      if (classified) {
+        setSecurityAlert(classified);
+      } else {
+        toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    /* Full-height, scroll-safe container — important when soft keyboard appears */
     <div className="min-h-screen bg-background flex flex-col items-center justify-start pt-10 pb-8 px-4 overflow-y-auto">
 
       {/* Brand */}
@@ -79,7 +116,7 @@ export default function AuthPage() {
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-muted-foreground hover:bg-muted active:bg-muted"
               }`}
-              onClick={() => setMode("login")}
+              onClick={() => switchMode("login")}
             >
               Sign In
             </button>
@@ -90,14 +127,24 @@ export default function AuthPage() {
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-muted-foreground hover:bg-muted active:bg-muted"
               }`}
-              onClick={() => setMode("register")}
+              onClick={() => switchMode("register")}
             >
               Create Account
             </button>
           </div>
         </CardHeader>
 
-        <CardContent className="px-4 pb-4 pt-2">
+        <CardContent className="px-4 pb-4 pt-2 space-y-4">
+
+          {/* Security alert banner */}
+          {securityAlert && (
+            <SecurityAlert
+              type={securityAlert.type}
+              message={securityAlert.message}
+              onDismiss={() => setSecurityAlert(null)}
+            />
+          )}
+
           {mode === "login" ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
@@ -142,7 +189,7 @@ export default function AuthPage() {
                 <button
                   type="button"
                   className="text-primary font-medium hover:underline min-h-0 min-w-0 h-auto"
-                  onClick={() => setMode("register")}
+                  onClick={() => switchMode("register")}
                 >
                   Create one
                 </button>
@@ -205,6 +252,19 @@ export default function AuthPage() {
                   className="h-11"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reg-confirm">Confirm Password</Label>
+                <Input
+                  id="reg-confirm"
+                  data-testid="input-reg-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  value={regConfirm}
+                  onChange={e => setRegConfirm(e.target.value)}
+                  className="h-11"
+                />
+              </div>
               <Button
                 data-testid="button-register"
                 type="submit"
@@ -218,7 +278,7 @@ export default function AuthPage() {
                 <button
                   type="button"
                   className="text-primary font-medium hover:underline min-h-0 min-w-0 h-auto"
-                  onClick={() => setMode("login")}
+                  onClick={() => switchMode("login")}
                 >
                   Sign in
                 </button>

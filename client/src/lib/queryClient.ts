@@ -5,6 +5,10 @@ import { getSessionToken } from "./auth";
 // All API calls use plain relative /api/ paths — no proxy URL needed.
 const API_BASE = "";
 
+// 20-second timeout on all API requests — prevents the loading screen from
+// hanging forever if Vercel's function doesn't respond.
+const API_TIMEOUT_MS = 20_000;
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -17,12 +21,26 @@ export async function apiRequest(
   const token = getSessionToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  return fetch(`${API_BASE}${url}`, {
-    method,
-    headers,
-    credentials: "include",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${API_BASE}${url}`, {
+      method,
+      headers,
+      credentials: "include",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (err: any) {
+    clearTimeout(timer);
+    if (err?.name === "AbortError") {
+      throw new Error("Request timed out — server is not responding. Please try again.");
+    }
+    throw err;
+  }
 }
 
 async function defaultQueryFn({ queryKey }: { queryKey: readonly unknown[] }) {

@@ -13,6 +13,7 @@ import NotificationsPage from "@/pages/notifications";
 import SearchPage from "@/pages/search";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/app-layout";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useEffect } from "react";
 
 function RedirectToHome() {
@@ -60,16 +61,18 @@ function AppRouter() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        {/* Router lives at the very top so all children share one hash location */}
-        <Router hook={useHashLocation}>
-          <AuthProvider>
-            <AppRouter />
-            <Toaster />
-          </AuthProvider>
-        </Router>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          {/* Router lives at the very top so all children share one hash location */}
+          <Router hook={useHashLocation}>
+            <AuthProvider>
+              <AppRouter />
+              <Toaster />
+            </AuthProvider>
+          </Router>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

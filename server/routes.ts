@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
-import { storage, dbReady } from "./storage";
+import { storage } from "./storage";
 import crypto from "crypto";
 
 const COOKIE_NAME = "nexus_session";
@@ -122,7 +122,7 @@ async function enrichPost(post: any, userId: number) {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express) {
-  await dbReady;
+  // Tables are initialized as a background fire-and-forget — never block route setup.
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -743,7 +743,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.status(500).json({ error: "Failed to load suggestions" });
     }
   });
-
   // ── Security Events (admin audit log) ────────────────────────────────────────
   // Protected by a server-side secret header — no UI role system yet.
   // Set ADMIN_SECRET env var; pass it as X-Admin-Secret header to access.
@@ -764,4 +763,48 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.status(500).json({ error: "Failed to load security events" });
     }
   });
+  // ── Global exception handler — catches any unhandled route errors ───────────
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const ip = getClientIp(req);
+    const ua = String(req.headers["user-agent"] ?? "");
+    const status = err?.status ?? err?.statusCode ?? 500;
+    const message = err?.message ?? "Internal server error";
+    console.error(`[EXCEPTION] ${req.method} ${req.path} → ${status}: ${message} | IP=${ip}`);
+    // Log 4xx+ as security events (could be probing / fuzzing)
+    if (status >= 400) {
+      storage.logSecurityEvent({
+        targetUserId: (req as any).user?.id ?? null,
+        claimedToken: null,
+        presentedCredential: null,
+        eventType: "exception",
+        severity: status >= 500 ? "high" : "medium",
+        ipAddress: ip,
+        userAgent: ua,
+        detail: `Unhandled error on ${req.method} ${req.path}: [${status}] ${message}`,
+        blocked: 0,
+      }).catch(() => {});
+    }
+    res.status(status).json({ error: message });
+  });
+
+  // ── Unknown /api/* routes — log as potential scanning/probing ─────────────
+  app.all("/api/*path", (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const ua = String(req.headers["user-agent"] ?? "");
+    console.warn(`[SECURITY] Unknown API route probed: ${req.method} ${req.path} | IP=${ip}`);
+    storage.logSecurityEvent({
+      targetUserId: null,
+      claimedToken: req.headers.authorization?.replace("Bearer ", "").slice(0, 16) + "…" || null,
+      presentedCredential: null,
+      eventType: "unknown_route",
+      severity: "low",
+      ipAddress: ip,
+      userAgent: ua,
+      detail: `Unknown API endpoint probed: ${req.method} ${req.path}. Body keys: ${Object.keys(req.body ?? {}).join(", ") || "none"}`,
+      blocked: 1,
+    }).catch(() => {});
+    res.status(404).json({ error: "Not found" });
+  });
+
+
 }

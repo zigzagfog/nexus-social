@@ -32,7 +32,8 @@ function getDb(): ReturnType<typeof drizzle> {
         "TURSO_DATABASE_URL is not set. Please set TURSO_DATABASE_URL in Vercel environment variables."
       );
     }
-    _client = createClient({ url: tursoUrl, authToken: tursoToken });
+    const cleanUrl = tursoUrl.trim();
+    _client = createClient({ url: cleanUrl, authToken: tursoToken?.trim() });
     _db = drizzle(_client);
   }
   return _db;
@@ -129,8 +130,12 @@ async function initTables() {
   await client.batch(stmts.map(sql => ({ sql })));
 }
 
-// Run table init immediately — exported so server/index.ts can await it.
-export const dbReady = initTables();
+// Run table init immediately — fire-and-forget on Vercel (tables exist after first deploy).
+// server/index.ts can still await this for local dev safety.
+export const dbReady = initTables().catch((err) => {
+  // Log but don't crash — tables likely already exist
+  console.warn("[storage] initTables warning (non-fatal):", err?.message ?? err);
+});
 
 // ─── Storage interface ────────────────────────────────────────────────────────
 export interface IStorage {
