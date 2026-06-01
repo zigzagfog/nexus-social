@@ -4,19 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { SecurityAlert, classifyError, type SecurityAlertType } from "@/components/security-alert";
+import { AlertCircle } from "lucide-react";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
+
+  // Persistent error (shown under the button, never disappears on its own)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [securityAlert, setSecurityAlert] = useState<{
     type: SecurityAlertType;
     message: string;
   } | null>(null);
 
   const { login, register } = useAuth();
-  const { toast } = useToast();
 
   const [loginEmail, setLoginEmail]       = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -25,27 +27,32 @@ export default function AuthPage() {
   const [regName, setRegName]         = useState("");
   const [regEmail, setRegEmail]       = useState("");
   const [regPassword, setRegPassword] = useState("");
-  const [regConfirm, setRegConfirm]   = useState("");
 
-  // Clear security alert when switching modes
+  const clearErrors = () => { setErrorMsg(null); setSecurityAlert(null); };
+
   const switchMode = (m: "login" | "register") => {
     setMode(m);
-    setSecurityAlert(null);
+    clearErrors();
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSecurityAlert(null);
+    clearErrors();
+
+    if (!loginEmail || !loginPassword) {
+      setErrorMsg("Please fill in both fields.");
+      return;
+    }
+
     setLoading(true);
     try {
       await login(loginEmail, loginPassword);
     } catch (err: any) {
-      // Check if this is a security-classified error
       const classified = classifyError(err);
       if (classified) {
         setSecurityAlert(classified);
       } else {
-        toast({ title: "Sign in failed", description: err.message, variant: "destructive" });
+        setErrorMsg(err.message || "Sign in failed. Please check your email and password.");
       }
     } finally {
       setLoading(false);
@@ -54,23 +61,22 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSecurityAlert(null);
+    clearErrors();
 
-    // Frontend validation
-    if (!regUsername || !regName || !regEmail || !regPassword) {
-      toast({ title: "All fields required", variant: "destructive" });
+    if (!regName) {
+      setErrorMsg("Please enter your full name.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)) {
-      toast({ title: "Enter a valid email address", variant: "destructive" });
+    if (!regUsername) {
+      setErrorMsg("Please choose a username (letters, numbers, underscores only).");
+      return;
+    }
+    if (!regEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)) {
+      setErrorMsg("Please enter a valid email address.");
       return;
     }
     if (regPassword.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
-      return;
-    }
-    if (regPassword !== regConfirm) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
+      setErrorMsg("Password must be at least 6 characters long.");
       return;
     }
 
@@ -82,7 +88,7 @@ export default function AuthPage() {
       if (classified) {
         setSecurityAlert(classified);
       } else {
-        toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+        setErrorMsg(err.message || "Could not create account. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -107,14 +113,13 @@ export default function AuthPage() {
 
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="pb-2 px-4 pt-4">
-          {/* Mode toggle */}
           <div className="flex rounded-lg overflow-hidden border border-border">
             <button
               data-testid="button-tab-login"
-              className={`flex-1 h-10 text-sm font-medium transition-colors min-h-0 ${
+              className={`flex-1 h-11 text-sm font-medium transition-colors ${
                 mode === "login"
                   ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground hover:bg-muted active:bg-muted"
+                  : "bg-card text-muted-foreground hover:bg-muted"
               }`}
               onClick={() => switchMode("login")}
             >
@@ -122,10 +127,10 @@ export default function AuthPage() {
             </button>
             <button
               data-testid="button-tab-register"
-              className={`flex-1 h-10 text-sm font-medium transition-colors min-h-0 ${
+              className={`flex-1 h-11 text-sm font-medium transition-colors ${
                 mode === "register"
                   ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground hover:bg-muted active:bg-muted"
+                  : "bg-card text-muted-foreground hover:bg-muted"
               }`}
               onClick={() => switchMode("register")}
             >
@@ -134,19 +139,19 @@ export default function AuthPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="px-4 pb-4 pt-2 space-y-4">
+        <CardContent className="px-4 pb-5 pt-3 space-y-4">
 
-          {/* Security alert banner */}
+          {/* Security alert (stays visible until dismissed) */}
           {securityAlert && (
             <SecurityAlert
               type={securityAlert.type}
               message={securityAlert.message}
-              onDismiss={() => setSecurityAlert(null)}
+              onDismiss={clearErrors}
             />
           )}
 
           {mode === "login" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4" noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="login-email">Email</Label>
                 <Input
@@ -157,8 +162,7 @@ export default function AuthPage() {
                   autoComplete="email"
                   placeholder="you@example.com"
                   value={loginEmail}
-                  onChange={e => setLoginEmail(e.target.value)}
-                  required
+                  onChange={e => { setLoginEmail(e.target.value); clearErrors(); }}
                   className="h-11"
                 />
               </div>
@@ -171,11 +175,19 @@ export default function AuthPage() {
                   autoComplete="current-password"
                   placeholder="••••••••"
                   value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                  required
+                  onChange={e => { setLoginPassword(e.target.value); clearErrors(); }}
                   className="h-11"
                 />
               </div>
+
+              {/* Error message — always visible, never auto-hides */}
+              {errorMsg && (
+                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2.5 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
               <Button
                 data-testid="button-login"
                 type="submit"
@@ -188,7 +200,7 @@ export default function AuthPage() {
                 Don't have an account?{" "}
                 <button
                   type="button"
-                  className="text-primary font-medium hover:underline min-h-0 min-w-0 h-auto"
+                  className="text-primary font-medium hover:underline"
                   onClick={() => switchMode("register")}
                 >
                   Create one
@@ -196,18 +208,17 @@ export default function AuthPage() {
               </p>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form onSubmit={handleRegister} className="space-y-4" noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="reg-name">Full Name</Label>
                 <Input
                   id="reg-name"
                   data-testid="input-full-name"
                   type="text"
-                  inputMode="text"
                   autoComplete="name"
                   placeholder="Jane Smith"
                   value={regName}
-                  onChange={e => setRegName(e.target.value)}
+                  onChange={e => { setRegName(e.target.value); clearErrors(); }}
                   className="h-11"
                 />
               </div>
@@ -219,23 +230,33 @@ export default function AuthPage() {
                   type="text"
                   inputMode="text"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="janesmith"
                   value={regUsername}
-                  onChange={e => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  onChange={e => {
+                    // Only allow letters, numbers, underscores — no email characters
+                    setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""));
+                    clearErrors();
+                  }}
                   className="h-11"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Letters, numbers, and underscores only. Not your email address.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="reg-email">Email</Label>
                 <Input
                   id="reg-email"
                   data-testid="input-reg-email"
-                  type="text"
+                  type="email"
                   inputMode="email"
                   autoComplete="email"
                   placeholder="you@example.com"
                   value={regEmail}
-                  onChange={e => setRegEmail(e.target.value.trim())}
+                  onChange={e => { setRegEmail(e.target.value.trim()); clearErrors(); }}
                   className="h-11"
                 />
               </div>
@@ -246,25 +267,21 @@ export default function AuthPage() {
                   data-testid="input-reg-password"
                   type="password"
                   autoComplete="new-password"
-                  placeholder="••••••••"
+                  placeholder="At least 6 characters"
                   value={regPassword}
-                  onChange={e => setRegPassword(e.target.value)}
+                  onChange={e => { setRegPassword(e.target.value); clearErrors(); }}
                   className="h-11"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="reg-confirm">Confirm Password</Label>
-                <Input
-                  id="reg-confirm"
-                  data-testid="input-reg-confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  value={regConfirm}
-                  onChange={e => setRegConfirm(e.target.value)}
-                  className="h-11"
-                />
-              </div>
+
+              {/* Error message — always visible, never auto-hides */}
+              {errorMsg && (
+                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2.5 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
               <Button
                 data-testid="button-register"
                 type="submit"
@@ -277,7 +294,7 @@ export default function AuthPage() {
                 Already have an account?{" "}
                 <button
                   type="button"
-                  className="text-primary font-medium hover:underline min-h-0 min-w-0 h-auto"
+                  className="text-primary font-medium hover:underline"
                   onClick={() => switchMode("login")}
                 >
                   Sign in
