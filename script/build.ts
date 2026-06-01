@@ -1,11 +1,12 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "node:fs/promises";
+import { rm, readFile, mkdir } from "node:fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
 const allowlist = [
   "@google/generative-ai",
+  "@libsql/client",
   "axios",
   "cors",
   "date-fns",
@@ -36,7 +37,7 @@ async function buildAll() {
   console.log("building client...");
   await viteBuild();
 
-  console.log("building server...");
+  console.log("building server (dist/index.cjs)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
@@ -57,6 +58,59 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  console.log("building Vercel serverless handler (api/server.cjs)...");
+  await mkdir("api", { recursive: true });
+
+  await esbuild({
+    entryPoints: ["server/vercel.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "api/server.cjs",
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+    // Bundle everything — no external deps needed in serverless
+    // @libsql/client is included (it supports Vercel edge/node runtimes)
+    external: [
+      // Node built-ins only
+      "node:*",
+      "fs",
+      "path",
+      "http",
+      "https",
+      "net",
+      "os",
+      "crypto",
+      "stream",
+      "util",
+      "url",
+      "events",
+      "buffer",
+      "string_decoder",
+      "querystring",
+      "child_process",
+      "cluster",
+      "dgram",
+      "dns",
+      "domain",
+      "readline",
+      "repl",
+      "tls",
+      "tty",
+      "vm",
+      "zlib",
+      "assert",
+      "punycode",
+      "timers",
+    ],
+    logLevel: "info",
+    // Allow @libsql/client WASM to be loaded
+    loader: { ".wasm": "file" },
+  });
+
+  console.log("build complete.");
 }
 
 buildAll().catch((err) => {
