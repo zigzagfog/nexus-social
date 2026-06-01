@@ -13,6 +13,7 @@ export default function AuthPage() {
 
   // Persistent error (shown under the button, never disappears on its own)
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [alreadyExists, setAlreadyExists] = useState(false); // show "switch to sign in" hint
   const [securityAlert, setSecurityAlert] = useState<{
     type: SecurityAlertType;
     message: string;
@@ -28,7 +29,7 @@ export default function AuthPage() {
   const [regEmail, setRegEmail]       = useState("");
   const [regPassword, setRegPassword] = useState("");
 
-  const clearErrors = () => { setErrorMsg(null); setSecurityAlert(null); };
+  const clearErrors = () => { setErrorMsg(null); setAlreadyExists(false); setSecurityAlert(null); };
 
   const switchMode = (m: "login" | "register") => {
     setMode(m);
@@ -88,7 +89,15 @@ export default function AuthPage() {
       if (classified) {
         setSecurityAlert(classified);
       } else {
-        setErrorMsg(err.message || "Could not create account. Please try again.");
+        const msg: string = err.message || "Could not create account. Please try again.";
+        // Detect "already taken" / "already registered" — offer to switch to sign in
+        const isDupe = /already|taken|registered|exists/i.test(msg);
+        setAlreadyExists(isDupe);
+        setErrorMsg(isDupe
+          ? "This email or username already has an account. Tap \"Switch to Sign In\" below."
+          : msg === "Unexpected response from server. Please try again."
+            ? "Connection error — please wait a moment and try again."
+            : msg);
       }
     } finally {
       setLoading(false);
@@ -280,6 +289,18 @@ export default function AuthPage() {
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
+              )}
+
+              {/* If account already exists, show a prominent switch button */}
+              {alreadyExists && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11 border-primary text-primary font-semibold"
+                  onClick={() => switchMode("login")}
+                >
+                  Switch to Sign In
+                </Button>
               )}
 
               <Button
