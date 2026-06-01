@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Home, Users, Bell, Search, LogOut, User, Moon, Sun } from "lucide-react";
+import { Home, Users, Bell, Search, LogOut, User, Moon, Sun, Globe } from "lucide-react";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -144,6 +144,19 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <a href={`/#/profile/${user?.id}`} className="min-h-0 min-w-0 w-full cursor-pointer">
                     <User className="w-4 h-4 mr-2" />
                     View Profile
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href="https://www.jmfcool.org" target="_blank" className="min-h-0 min-w-0 w-full cursor-pointer">
+                    <Globe className="w-4 h-4 mr-2" />
+                    jmfcool.org
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="https://resume.jmfcool.org" target="_blank" className="min-h-0 min-w-0 w-full cursor-pointer">
+                    <User className="w-4 h-4 mr-2" />
+                    Resume
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
