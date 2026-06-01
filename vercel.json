@@ -2,13 +2,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
   "functions": {
-    "api/index.js": {
-      "maxDuration": 30,
-      "includeFiles": "server/**"
+    "api/server.cjs": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/api/(.*)", "destination": "/api/server.cjs" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
