@@ -60,7 +60,7 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  console.log("building Vercel serverless handler (api/server.cjs)...");
+  console.log("building Vercel serverless handler (api/server.js)...");
   await mkdir("api", { recursive: true });
 
   await esbuild({
@@ -68,7 +68,7 @@ async function buildAll() {
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "api/server.cjs",
+    outfile: "api/server.js",
     define: {
       "process.env.NODE_ENV": '"production"',
     },
