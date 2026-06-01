@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SecurityAlert, classifyError, type SecurityAlertType } from "@/components/security-alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -28,6 +28,7 @@ export default function AuthPage() {
   const [regName, setRegName]         = useState("");
   const [regEmail, setRegEmail]       = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
 
   const clearErrors = () => { setErrorMsg(null); setAlreadyExists(false); setSecurityAlert(null); };
 
@@ -276,16 +277,26 @@ export default function AuthPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="reg-password">Password</Label>
-                <Input
-                  id="reg-password"
-                  data-testid="input-reg-password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="At least 6 characters"
-                  value={regPassword}
-                  onChange={e => { setRegPassword(e.target.value); clearErrors(); }}
-                  className="h-11"
-                />
+                <div className="relative">
+                  <Input
+                    id="reg-password"
+                    data-testid="input-reg-password"
+                    type={showRegPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="At least 6 characters"
+                    value={regPassword}
+                    onChange={e => { setRegPassword(e.target.value); clearErrors(); }}
+                    className="h-11 pr-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showRegPassword ? "Hide password" : "Show password"}
+                  >
+                    {showRegPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
 
               {/* Error message — always visible, never auto-hides */}
