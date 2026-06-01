@@ -1,6 +1,8 @@
-import { drizzle } from "drizzle-orm/libsql";
-// Use @libsql/client/web for serverless (HTTP/WebSocket transport — no native binaries)
-// This works on Vercel, Cloudflare Workers, and any edge runtime
+// Use drizzle-orm/libsql/web + @libsql/client/web for serverless compatibility.
+// These variants use HTTP/WebSocket transport only — no native .node binaries.
+// The default drizzle-orm/libsql uses @libsql/client which requires
+// native linux-x64-gnu binaries that crash in Vercel serverless functions.
+import { drizzle } from "drizzle-orm/libsql/web";
 import { createClient } from "@libsql/client/web";
 import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
 import {

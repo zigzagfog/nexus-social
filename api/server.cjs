@@ -24289,8 +24289,8 @@ var import_express = __toESM(require_express2(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_node_http = require("node:http");
 
-// node_modules/drizzle-orm/libsql/driver.js
-var import_client = require("@libsql/client");
+// node_modules/drizzle-orm/libsql/web/index.js
+var import_web = require("@libsql/client/web");
 
 // node_modules/drizzle-orm/entity.js
 var entityKind = Symbol.for("drizzle:entityKind");
@@ -29810,10 +29810,10 @@ function construct(client2, config = {}) {
   return db2;
 }
 
-// node_modules/drizzle-orm/libsql/driver.js
+// node_modules/drizzle-orm/libsql/web/index.js
 function drizzle(...params) {
   if (typeof params[0] === "string") {
-    const instance = (0, import_client.createClient)({
+    const instance = (0, import_web.createClient)({
       url: params[0]
     });
     return construct(instance, params[1]);
@@ -29821,7 +29821,7 @@ function drizzle(...params) {
   if (isConfig(params[0])) {
     const { connection, client: client2, ...drizzleConfig } = params[0];
     if (client2) return construct(client2, drizzleConfig);
-    const instance = typeof connection === "string" ? (0, import_client.createClient)({ url: connection }) : (0, import_client.createClient)(connection);
+    const instance = typeof connection === "string" ? (0, import_web.createClient)({ url: connection }) : (0, import_web.createClient)(connection);
     return construct(instance, drizzleConfig);
   }
   return construct(params[0], params[1]);
@@ -29834,7 +29834,7 @@ function drizzle(...params) {
 })(drizzle || (drizzle = {}));
 
 // server/storage.ts
-var import_web = require("@libsql/client/web");
+var import_web3 = require("@libsql/client/web");
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -34225,7 +34225,7 @@ if (!tursoUrl) {
     "TURSO_DATABASE_URL is not set. Please set it to your Turso database URL."
   );
 }
-var client = (0, import_web.createClient)({
+var client = (0, import_web3.createClient)({
   url: tursoUrl,
   authToken: tursoToken
 });
