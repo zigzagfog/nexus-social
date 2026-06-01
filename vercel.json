@@ -3,8 +3,10 @@
   "outputDirectory": "dist/public",
   "functions": {
     "api/server.cjs": {
-      "maxDuration": 30,
-      "includeFiles": "api/**"
+      "maxDuration": 30
+    },
+    "api/ping.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
