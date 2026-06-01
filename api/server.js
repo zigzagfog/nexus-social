@@ -34314,9 +34314,7 @@ async function initTables() {
     )`
   ];
   const client = _client ?? (getDb(), _client);
-  for (const stmt of stmts) {
-    await client.execute(stmt);
-  }
+  await client.batch(stmts.map((sql2) => ({ sql: sql2 })));
 }
 var dbReady = initTables();
 var storage = {

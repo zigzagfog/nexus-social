@@ -124,9 +124,9 @@ async function initTables() {
   ];
   // Ensure DB is initialized before running table creation
   const client = _client ?? (getDb(), _client!);
-  for (const stmt of stmts) {
-    await client.execute(stmt);
-  }
+  // Use batch() to send all CREATE TABLE statements in a single HTTP round-trip.
+  // This is critical for Vercel serverless — 8 sequential requests would be too slow.
+  await client.batch(stmts.map(sql => ({ sql })));
 }
 
 // Run table init immediately — exported so server/index.ts can await it.
