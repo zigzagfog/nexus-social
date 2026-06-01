@@ -54,7 +54,8 @@ function getApp(): Promise<express.Express> {
 }
 
 // Vercel serverless handler
-export default async function handler(req: Request, res: Response) {
+// Use module.exports for CJS compatibility (Vercel doesn't use .default)
+async function handler(req: Request, res: Response) {
   try {
     const app = await getApp();
     app(req, res);
@@ -63,3 +64,5 @@ export default async function handler(req: Request, res: Response) {
     res.status(500).json({ error: err.message || "Internal Server Error" });
   }
 }
+
+export default handler;

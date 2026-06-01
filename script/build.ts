@@ -108,6 +108,10 @@ async function buildAll() {
     logLevel: "info",
     // Allow @libsql/client WASM to be loaded
     loader: { ".wasm": "file" },
+    // Vercel CJS functions need module.exports = handler (not module.exports.default)
+    footer: {
+      js: "if (typeof module !== 'undefined' && module.exports && module.exports.default) { module.exports = module.exports.default; }",
+    },
   });
 
   console.log("build complete.");

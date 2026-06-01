@@ -29036,7 +29036,7 @@ var require_promise_limit = __commonJS({
 // server/vercel.ts
 var vercel_exports = {};
 __export(vercel_exports, {
-  default: () => handler
+  default: () => vercel_default
 });
 module.exports = __toCommonJS(vercel_exports);
 
@@ -45022,6 +45022,7 @@ async function handler(req, res) {
     res.status(500).json({ error: err.message || "Internal Server Error" });
   }
 }
+var vercel_default = handler;
 /*! Bundled license information:
 
 depd/index.js:
@@ -45314,3 +45315,4 @@ cookie-parser/index.js:
    * MIT Licensed
    *)
 */
+if (typeof module !== 'undefined' && module.exports && module.exports.default) { module.exports = module.exports.default; }
