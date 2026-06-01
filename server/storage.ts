@@ -1,5 +1,7 @@
 import { drizzle } from "drizzle-orm/libsql";
-import { createClient } from "@libsql/client";
+// Use @libsql/client/web for serverless (HTTP/WebSocket transport — no native binaries)
+// This works on Vercel, Cloudflare Workers, and any edge runtime
+import { createClient } from "@libsql/client/web";
 import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
 import {
   users, posts, comments, likes, friendships, notifications, sessions, securityEvents,
@@ -19,11 +21,16 @@ import {
 const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-const client = createClient(
-  tursoUrl
-    ? { url: tursoUrl, authToken: tursoToken }
-    : { url: "file:data.db" }
-);
+if (!tursoUrl) {
+  throw new Error(
+    "TURSO_DATABASE_URL is not set. Please set it to your Turso database URL."
+  );
+}
+
+const client = createClient({
+  url: tursoUrl,
+  authToken: tursoToken,
+});
 
 const db = drizzle(client);
 
