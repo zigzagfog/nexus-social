@@ -225,6 +225,8 @@ export default function AuthPage() {
                   data-testid="input-full-name"
                   type="text"
                   autoComplete="name"
+                  autoCapitalize="words"
+                  autoCorrect="off"
                   placeholder="Jane Smith"
                   value={regName}
                   onChange={e => { setRegName(e.target.value); clearErrors(); }}
@@ -238,9 +240,10 @@ export default function AuthPage() {
                   data-testid="input-username"
                   type="text"
                   inputMode="text"
-                  autoComplete="username"
+                  autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
+                  autoSave="off"
                   spellCheck={false}
                   placeholder="janesmith"
                   value={regUsername}
@@ -263,6 +266,8 @@ export default function AuthPage() {
                   type="email"
                   inputMode="email"
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   placeholder="you@example.com"
                   value={regEmail}
                   onChange={e => { setRegEmail(e.target.value.trim()); clearErrors(); }}
