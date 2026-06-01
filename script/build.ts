@@ -79,6 +79,7 @@ async function buildAll() {
       // (they use native binaries that can't be inlined by esbuild)
       "@libsql/client",
       "@libsql/client/web",
+      "@libsql/client/http",
       "@libsql/core",
       "@libsql/hrana-client",
       // Node built-ins only

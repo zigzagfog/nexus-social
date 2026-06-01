@@ -1,9 +1,8 @@
-// Use drizzle-orm/libsql/web + @libsql/client/web for serverless compatibility.
-// These variants use HTTP/WebSocket transport only — no native .node binaries.
-// The default drizzle-orm/libsql uses @libsql/client which requires
-// native linux-x64-gnu binaries that crash in Vercel serverless functions.
-import { drizzle } from "drizzle-orm/libsql/web";
-import { createClient } from "@libsql/client/web";
+// Use drizzle-orm/libsql/http + @libsql/client/http for Vercel serverless.
+// Pure HTTP transport (no WebSockets, no native binaries) — most reliable
+// option for serverless functions where WebSocket connections may be restricted.
+import { drizzle } from "drizzle-orm/libsql/http";
+import { createClient } from "@libsql/client/http";
 import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
 import {
   users, posts, comments, likes, friendships, notifications, sessions, securityEvents,

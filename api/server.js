@@ -24289,8 +24289,8 @@ var import_express = __toESM(require_express2(), 1);
 var import_cookie_parser = __toESM(require_cookie_parser(), 1);
 var import_node_http = require("node:http");
 
-// node_modules/drizzle-orm/libsql/web/index.js
-var import_web = require("@libsql/client/web");
+// node_modules/drizzle-orm/libsql/http/index.js
+var import_http = require("@libsql/client/http");
 
 // node_modules/drizzle-orm/entity.js
 var entityKind = Symbol.for("drizzle:entityKind");
@@ -29810,10 +29810,10 @@ function construct(client, config = {}) {
   return db2;
 }
 
-// node_modules/drizzle-orm/libsql/web/index.js
+// node_modules/drizzle-orm/libsql/http/index.js
 function drizzle(...params) {
   if (typeof params[0] === "string") {
-    const instance = (0, import_web.createClient)({
+    const instance = (0, import_http.createClient)({
       url: params[0]
     });
     return construct(instance, params[1]);
@@ -29821,7 +29821,7 @@ function drizzle(...params) {
   if (isConfig(params[0])) {
     const { connection, client, ...drizzleConfig } = params[0];
     if (client) return construct(client, drizzleConfig);
-    const instance = typeof connection === "string" ? (0, import_web.createClient)({ url: connection }) : (0, import_web.createClient)(connection);
+    const instance = typeof connection === "string" ? (0, import_http.createClient)({ url: connection }) : (0, import_http.createClient)(connection);
     return construct(instance, drizzleConfig);
   }
   return construct(params[0], params[1]);
@@ -29834,7 +29834,7 @@ function drizzle(...params) {
 })(drizzle || (drizzle = {}));
 
 // server/storage.ts
-var import_web3 = require("@libsql/client/web");
+var import_http3 = require("@libsql/client/http");
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -34229,7 +34229,7 @@ function getDb() {
         "TURSO_DATABASE_URL is not set. Please set TURSO_DATABASE_URL in Vercel environment variables."
       );
     }
-    _client = (0, import_web3.createClient)({ url: tursoUrl, authToken: tursoToken });
+    _client = (0, import_http3.createClient)({ url: tursoUrl, authToken: tursoToken });
     _db = drizzle(_client);
   }
   return _db;
