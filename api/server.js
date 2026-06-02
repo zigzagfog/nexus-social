@@ -34216,6 +34216,17 @@ var sessions = sqliteTable("sessions", {
   createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
 });
 var insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
+var passwordResetTokens = sqliteTable("password_reset_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  code: text("code").notNull(),
+  // 6-digit code shown to the user
+  expiresAt: text("expires_at").notNull(),
+  // ISO string — valid for 15 minutes
+  used: integer("used").notNull().default(0),
+  createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
 
 // server/storage.ts
 var _client = null;
@@ -34311,6 +34322,14 @@ async function initTables() {
       user_agent TEXT,
       detail TEXT,
       blocked INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      code TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     )`
   ];
@@ -34476,6 +34495,28 @@ var storage = {
       )
     );
     return rows[0]?.count ?? 0;
+  },
+  // ── Password Reset ─────────────────────────────────────────────────────────
+  async createPasswordResetToken(userId, code, expiresAt) {
+    await db.update(passwordResetTokens).set({ used: 1 }).where(and(eq(passwordResetTokens.userId, userId), eq(passwordResetTokens.used, 0)));
+    const rows = await db.insert(passwordResetTokens).values({ userId, code, expiresAt, used: 0, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
+    return rows[0];
+  },
+  async getValidResetToken(userId, code) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const rows = await db.select().from(passwordResetTokens).where(and(
+      eq(passwordResetTokens.userId, userId),
+      eq(passwordResetTokens.code, code),
+      eq(passwordResetTokens.used, 0),
+      sql`${passwordResetTokens.expiresAt} > ${now}`
+    ));
+    return rows[0];
+  },
+  async markResetTokenUsed(id) {
+    await db.update(passwordResetTokens).set({ used: 1 }).where(eq(passwordResetTokens.id, id));
+  },
+  async updateUserPassword(userId, hashedPassword) {
+    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
   }
 };
 
@@ -34675,6 +34716,44 @@ async function registerRoutes(httpServer, app) {
     if (token) await storage.deleteSession(token);
     res.clearCookie(COOKIE_NAME, { path: "/" });
     res.json({ ok: true });
+  });
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const ip = getClientIp(req);
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "Email is required" });
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (!user) {
+        return res.json({ ok: true, message: "If that email is registered, a reset code will appear here.", code: null });
+      }
+      const code = String(Math.floor(1e5 + Math.random() * 9e5));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1e3).toISOString();
+      await storage.createPasswordResetToken(user.id, code, expiresAt);
+      console.log(`[AUTH] Password reset code for user ${user.id} (${user.email}): ${code}`);
+      res.json({ ok: true, userId: user.id, code, expiresIn: 900 });
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      res.status(500).json({ error: "Failed to generate reset code" });
+    }
+  });
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { userId, code, newPassword } = req.body;
+      if (!userId || !code || !newPassword)
+        return res.status(400).json({ error: "userId, code, and newPassword are required" });
+      if (newPassword.length < 6)
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      const token = await storage.getValidResetToken(Number(userId), String(code));
+      if (!token) {
+        return res.status(400).json({ error: "Invalid or expired reset code" });
+      }
+      await storage.markResetTokenUsed(token.id);
+      await storage.updateUserPassword(Number(userId), hashPassword(newPassword));
+      res.json({ ok: true, message: "Password updated. You can now sign in." });
+    } catch (err) {
+      console.error("Reset password error:", err);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
   });
   app.get("/api/auth/me", requireAuth, (req, res) => {
     const { password: _pw, ...safeUser } = req.user;

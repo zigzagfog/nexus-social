@@ -239,6 +239,60 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ok: true });
   });
 
+  // ── Forgot password: request a reset code ──────────────────────────────────
+  // User submits their email → server creates a 6-digit code (shown in the response)
+  // valid for 15 minutes. No email service needed — code shown directly on screen.
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const ip = getClientIp(req);
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "Email is required" });
+
+      // Always respond with success even if email not found — prevents user enumeration
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (!user) {
+        return res.json({ ok: true, message: "If that email is registered, a reset code will appear here.", code: null });
+      }
+
+      // Generate a 6-digit code
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      await storage.createPasswordResetToken(user.id, code, expiresAt);
+
+      console.log(`[AUTH] Password reset code for user ${user.id} (${user.email}): ${code}`);
+
+      // Return the code directly (no email needed — user sees it on screen)
+      res.json({ ok: true, userId: user.id, code, expiresIn: 900 });
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      res.status(500).json({ error: "Failed to generate reset code" });
+    }
+  });
+
+  // ── Reset password: submit code + new password ───────────────────────────────
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { userId, code, newPassword } = req.body;
+      if (!userId || !code || !newPassword)
+        return res.status(400).json({ error: "userId, code, and newPassword are required" });
+      if (newPassword.length < 6)
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+      const token = await storage.getValidResetToken(Number(userId), String(code));
+      if (!token) {
+        return res.status(400).json({ error: "Invalid or expired reset code" });
+      }
+
+      await storage.markResetTokenUsed(token.id);
+      await storage.updateUserPassword(Number(userId), hashPassword(newPassword));
+
+      res.json({ ok: true, message: "Password updated. You can now sign in." });
+    } catch (err: any) {
+      console.error("Reset password error:", err);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   app.get("/api/auth/me", requireAuth, (req, res) => {
     const { password: _pw, ...safeUser } = (req as any).user;
     const rawToken = (req as any).rawToken;

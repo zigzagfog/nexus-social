@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/libsql/http";
 import { createClient } from "@libsql/client/http";
 import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
 import {
-  users, posts, comments, likes, friendships, notifications, sessions, securityEvents,
+  users, posts, comments, likes, friendships, notifications, sessions, securityEvents, passwordResetTokens,
   type User, type InsertUser,
   type Post, type InsertPost,
   type Comment, type InsertComment,
@@ -14,6 +14,7 @@ import {
   type Notification, type InsertNotification,
   type Session, type InsertSession,
   type SecurityEvent, type InsertSecurityEvent,
+  type PasswordResetToken,
 } from "@shared/schema";
 
 // ─── DB connection (lazy) ────────────────────────────────────────────────────
@@ -122,6 +123,14 @@ async function initTables() {
       blocked INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      code TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )`,
   ];
   // Ensure DB is initialized before running table creation
   const client = _client ?? (getDb(), _client!);
@@ -189,6 +198,12 @@ export interface IStorage {
   getSecurityEvents(limit?: number): Promise<SecurityEvent[]>;
   getSecurityEventsByIp(ip: string): Promise<SecurityEvent[]>;
   countRecentFailedLogins(ip: string, windowMs: number): Promise<number>;
+
+  // Password Reset
+  createPasswordResetToken(userId: number, code: string, expiresAt: string): Promise<PasswordResetToken>;
+  getValidResetToken(userId: number, code: string): Promise<PasswordResetToken | undefined>;
+  markResetTokenUsed(id: number): Promise<void>;
+  updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -380,5 +395,34 @@ export const storage: IStorage = {
         )
       );
     return rows[0]?.count ?? 0;
+  },
+
+  // ── Password Reset ─────────────────────────────────────────────────────────
+  async createPasswordResetToken(userId, code, expiresAt) {
+    // Invalidate any previous unused tokens for this user
+    await db.update(passwordResetTokens)
+      .set({ used: 1 })
+      .where(and(eq(passwordResetTokens.userId, userId), eq(passwordResetTokens.used, 0)));
+    const rows = await db.insert(passwordResetTokens)
+      .values({ userId, code, expiresAt, used: 0, createdAt: new Date().toISOString() })
+      .returning();
+    return rows[0] as PasswordResetToken;
+  },
+  async getValidResetToken(userId, code) {
+    const now = new Date().toISOString();
+    const rows = await db.select().from(passwordResetTokens)
+      .where(and(
+        eq(passwordResetTokens.userId, userId),
+        eq(passwordResetTokens.code, code),
+        eq(passwordResetTokens.used, 0),
+        sql`${passwordResetTokens.expiresAt} > ${now}`
+      ));
+    return rows[0] as PasswordResetToken | undefined;
+  },
+  async markResetTokenUsed(id) {
+    await db.update(passwordResetTokens).set({ used: 1 }).where(eq(passwordResetTokens.id, id));
+  },
+  async updateUserPassword(userId, hashedPassword) {
+    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
   },
 };

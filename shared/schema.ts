@@ -130,3 +130,17 @@ export const sessions = sqliteTable("sessions", {
 export const insertSessionSchema = createInsertSchema(sessions).omit({ id: true, createdAt: true });
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type Session = typeof sessions.$inferSelect;
+
+// ─── Password Reset Tokens ────────────────────────────────────────────────────
+export const passwordResetTokens = sqliteTable("password_reset_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  code: text("code").notNull(),         // 6-digit code shown to the user
+  expiresAt: text("expires_at").notNull(), // ISO string — valid for 15 minutes
+  used: integer("used").notNull().default(0),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
