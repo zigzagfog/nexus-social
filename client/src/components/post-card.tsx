@@ -153,9 +153,24 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         </div>
 
         {/* Content */}
-        <p className="text-sm leading-relaxed whitespace-pre-wrap mb-3" data-testid={`text-post-content-${localPost.id}`}>
-          {localPost.content}
-        </p>
+        {localPost.content ? (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap mb-3" data-testid={`text-post-content-${localPost.id}`}>
+            {localPost.content}
+          </p>
+        ) : null}
+
+        {/* Post image */}
+        {localPost.imageUrl ? (
+          <div className="mb-3 -mx-3 sm:-mx-4 sm:rounded-none overflow-hidden">
+            <img
+              src={localPost.imageUrl}
+              alt="Post image"
+              className="w-full max-h-[500px] object-cover"
+              data-testid={`img-post-${localPost.id}`}
+              loading="lazy"
+            />
+          </div>
+        ) : null}
 
         {/* Stats row */}
         {(localPost.likeCount > 0 || localPost.commentCount > 0) && (

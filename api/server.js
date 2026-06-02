@@ -34760,6 +34760,25 @@ async function registerRoutes(httpServer, app) {
     const rawToken = req.rawToken;
     res.json({ ...safeUser, _token: rawToken });
   });
+  app.post("/api/upload", requireAuth, async (req, res) => {
+    try {
+      const { dataUrl } = req.body;
+      if (!dataUrl || typeof dataUrl !== "string") {
+        return res.status(400).json({ error: "dataUrl is required" });
+      }
+      if (!dataUrl.startsWith("data:image/")) {
+        return res.status(400).json({ error: "Only image data URLs are accepted" });
+      }
+      const sizeBytes = Math.ceil(dataUrl.length * 3 / 4);
+      if (sizeBytes > 5 * 1024 * 1024) {
+        return res.status(413).json({ error: "Image too large \u2014 max 5 MB" });
+      }
+      res.json({ url: dataUrl });
+    } catch (err) {
+      console.error("Upload error:", err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  });
   app.get("/api/users/search", requireAuth, async (req, res) => {
     try {
       const q = String(req.query.q || "").trim();

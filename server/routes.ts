@@ -299,6 +299,32 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ ...safeUser, _token: rawToken });
   });
 
+  // ── Image upload ──────────────────────────────────────────────────────────────
+  // Accepts a base64 data URL, validates it's an image, returns { url } for storage.
+  // Images are stored as data URLs in Turso (resized to ≤1200px on the client).
+  app.post("/api/upload", requireAuth, async (req, res) => {
+    try {
+      const { dataUrl } = req.body;
+      if (!dataUrl || typeof dataUrl !== "string") {
+        return res.status(400).json({ error: "dataUrl is required" });
+      }
+      // Validate it's a real image data URL
+      if (!dataUrl.startsWith("data:image/")) {
+        return res.status(400).json({ error: "Only image data URLs are accepted" });
+      }
+      // Basic size guard: 5MB max (base64 ≈ 4/3 × raw bytes)
+      const sizeBytes = Math.ceil((dataUrl.length * 3) / 4);
+      if (sizeBytes > 5 * 1024 * 1024) {
+        return res.status(413).json({ error: "Image too large — max 5 MB" });
+      }
+      // Return the data URL directly — it will be stored in image_url column
+      res.json({ url: dataUrl });
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  });
+
   // ── Users ────────────────────────────────────────────────────────────────────
 
   app.get("/api/users/search", requireAuth, async (req, res) => {
