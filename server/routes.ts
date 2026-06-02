@@ -169,6 +169,22 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const token = generateToken();
       await storage.createSession({ userId: user.id, token });
       resetBruteForce(ip);
+
+      // ── Auto-friend: instantly connect new user with zigzagfog (id=14) ──────
+      // Skips if the new user IS zigzagfog, or if a friendship already exists.
+      const OWNER_ID = 14;
+      if (user.id !== OWNER_ID) {
+        try {
+          const existing = await storage.getFriendship(OWNER_ID, user.id);
+          if (!existing) {
+            await storage.sendFriendRequest({ requesterId: OWNER_ID, addresseeId: user.id, status: "accepted" });
+          }
+        } catch (friendErr) {
+          // Non-fatal — log but don't block registration
+          console.warn("[auto-friend] Could not create friendship:", friendErr);
+        }
+      }
+
       res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
       const { password: _pw, ...safeUser } = user;
       res.json({ user: safeUser, token });
