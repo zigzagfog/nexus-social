@@ -40,10 +40,9 @@ function ThemeToggle() {
 
 function NexusLogo() {
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-label="Nexus Social logo" className="shrink-0">
-      <rect width="32" height="32" rx="8" fill="hsl(221 83% 53%)" />
-      <path d="M8 10h4l4 6 4-6h4L16 22 8 10Z" fill="white" />
-      <circle cx="16" cy="24" r="2" fill="white" opacity="0.7" />
+    <svg width="32" height="32" viewBox="0 0 36 36" fill="none" aria-label="Nexus Social logo" className="shrink-0">
+      <rect width="36" height="36" rx="8" fill="hsl(38 92% 54%)" />
+      <text x="18" y="25" textAnchor="middle" fontFamily="system-ui, sans-serif" fontWeight="900" fontSize="18" fill="#0a0c14">JF</text>
     </svg>
   );
 }
