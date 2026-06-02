@@ -95,10 +95,13 @@
     @apply bg-background text-foreground font-sans;
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
-    /* Prevent iOS rubber-band scroll on body */
     overscroll-behavior: none;
     min-height: 100vh;
     min-height: -webkit-fill-available;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 
   /* Prevent iOS from auto-zooming inputs (font-size must be ≥16px) */

@@ -70,8 +70,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top Nav ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border shadow-sm"
-        style={{ paddingTop: "var(--safe-top)" }}>
+      <header className="sticky top-0 z-50 border-b border-border shadow-sm"
+        style={{ background: '#000', paddingTop: "var(--safe-top)" }}>
         <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
 
           {/* Logo */}
