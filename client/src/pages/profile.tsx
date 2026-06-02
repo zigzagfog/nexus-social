@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -14,8 +14,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Globe, UserPlus, UserCheck, UserMinus, Edit2, Users, FileText } from "lucide-react";
+import { MapPin, Globe, UserPlus, UserCheck, UserMinus, Edit2, Users, FileText, Camera, ImagePlus, Loader2 } from "lucide-react";
 
+// ── Shared image resize helper (same as post-composer) ────────────────────────
+function resizeImage(file: File, maxWidth: number, maxHeight: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxWidth / img.width, maxHeight / img.height);
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ── Edit Profile Dialog ───────────────────────────────────────────────────────
 function EditProfileDialog({ user, onSaved }: { user: any; onSaved: (u: any) => void }) {
   const { toast } = useToast();
   const { updateUser } = useAuth();
@@ -26,7 +46,6 @@ function EditProfileDialog({ user, onSaved }: { user: any; onSaved: (u: any) => 
     bio: user.bio || "",
     location: user.location || "",
     website: user.website || "",
-    avatarUrl: user.avatarUrl || "",
   });
 
   const save = async (e: React.FormEvent) => {
@@ -76,10 +95,6 @@ function EditProfileDialog({ user, onSaved }: { user: any; onSaved: (u: any) => 
             <Label>Website</Label>
             <Input value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} data-testid="input-website" placeholder="https://…" />
           </div>
-          <div className="space-y-1.5">
-            <Label>Avatar URL</Label>
-            <Input value={form.avatarUrl} onChange={e => setForm(f => ({ ...f, avatarUrl: e.target.value }))} data-testid="input-avatar-url" placeholder="https://…" />
-          </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={saving} data-testid="button-save-profile">
@@ -92,12 +107,19 @@ function EditProfileDialog({ user, onSaved }: { user: any; onSaved: (u: any) => 
   );
 }
 
+// ── Main Profile Page ─────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const params = useParams<{ id: string }>();
   const profileId = parseInt(params.id);
-  const { user: me } = useAuth();
+  const { user: me, updateUser } = useAuth();
   const { toast } = useToast();
   const [profileData, setProfileData] = useState<any>(null);
+
+  // Photo upload state
+  const [avatarUploading, setAvatarUploading]  = useState(false);
+  const [coverUploading,  setCoverUploading]   = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef  = useRef<HTMLInputElement>(null);
 
   const { data: fetchedProfile, isLoading: profileLoading } = useQuery({
     queryKey: ["/api/users", String(profileId)],
@@ -119,6 +141,49 @@ export default function ProfilePage() {
       return res.text().then(t => JSON.parse(t));
     },
   });
+
+  // ── Save a single photo field to the API ─────────────────────────────────
+  const savePhoto = async (field: "avatarUrl" | "coverUrl", dataUrl: string) => {
+    const res = await apiRequest("PATCH", "/api/users/me", { [field]: dataUrl });
+    const updated = await res.text().then(t => JSON.parse(t));
+    updateUser(updated);
+    setProfileData((p: any) => ({ ...p, [field]: dataUrl }));
+    queryClient.invalidateQueries({ queryKey: ["/api/users", String(profileId)] });
+  };
+
+  // ── Avatar picker ─────────────────────────────────────────────────────────
+  const handleAvatarPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const dataUrl = await resizeImage(file, 400, 400);
+      await savePhoto("avatarUrl", dataUrl);
+      toast({ title: "Profile photo updated" });
+    } catch {
+      toast({ title: "Could not update photo", variant: "destructive" });
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  // ── Cover picker ──────────────────────────────────────────────────────────
+  const handleCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverUploading(true);
+    try {
+      const dataUrl = await resizeImage(file, 1200, 480);
+      await savePhoto("coverUrl", dataUrl);
+      toast({ title: "Cover photo updated" });
+    } catch {
+      toast({ title: "Could not update cover", variant: "destructive" });
+    } finally {
+      setCoverUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const handleFriendAction = async () => {
     if (!profile) return;
@@ -149,6 +214,7 @@ export default function ProfilePage() {
   };
 
   const initials = profile?.displayName?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
+  const isMe = profile?.isMe;
 
   if (profileLoading || !profile) {
     return (
@@ -168,23 +234,71 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto px-0 sm:px-4 py-0 sm:py-6">
 
-      {/* Cover + avatar — flush to edges on mobile */}
+      {/* ── Cover + avatar ── */}
       <div className="relative mb-16 sm:mb-20">
+
         {/* Cover photo */}
-        <div className="h-36 sm:h-56 w-full sm:rounded-xl cover-gradient overflow-hidden">
-          {profile.coverUrl && (
-            <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+        <div className="relative h-36 sm:h-56 w-full sm:rounded-xl cover-gradient overflow-hidden group">
+          {profile.coverUrl
+            ? <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" data-testid="img-cover" />
+            : null
+          }
+
+          {/* Tap-to-change overlay — own profile only */}
+          {isMe && (
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={coverUploading}
+              data-testid="button-change-cover"
+              className="absolute inset-0 flex items-end justify-end p-3 bg-black/0 hover:bg-black/25 active:bg-black/30 transition-colors"
+              aria-label="Change cover photo"
+            >
+              <span className="flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors">
+                {coverUploading
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <ImagePlus className="w-3.5 h-3.5" />
+                }
+                {coverUploading ? "Uploading…" : "Change cover"}
+              </span>
+            </button>
           )}
         </div>
-        {/* Avatar — positioned to straddle cover/content */}
+
+        {/* Avatar — straddles cover/content */}
         <div className="absolute -bottom-10 sm:-bottom-12 left-4 sm:left-6">
-          <div className="story-ring inline-block rounded-full">
+          <div className="relative story-ring inline-block rounded-full">
             <Avatar className="w-20 h-20 sm:w-24 sm:h-24 border-4 border-card">
               <AvatarImage src={profile.avatarUrl || ""} />
               <AvatarFallback className="bg-primary text-primary-foreground text-xl sm:text-2xl font-bold">{initials}</AvatarFallback>
             </Avatar>
+
+            {/* Camera button — own profile only */}
+            {isMe && (
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                data-testid="button-change-avatar"
+                className="absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full flex items-center justify-center shadow-md transition-colors border-2 border-card"
+                aria-label="Change profile photo"
+              >
+                {avatarUploading
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Camera className="w-3.5 h-3.5" />
+                }
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Hidden file inputs */}
+        {isMe && (
+          <>
+            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" data-testid="input-avatar-file" onChange={handleAvatarPick} />
+            <input ref={coverInputRef}  type="file" accept="image/*" className="hidden" data-testid="input-cover-file"  onChange={handleCoverPick}  />
+          </>
+        )}
       </div>
 
       {/* Profile info card */}
@@ -196,7 +310,6 @@ export default function ProfilePage() {
               <p className="text-muted-foreground text-sm">@{profile.username}</p>
               {profile.bio && <p className="text-sm mt-1.5 max-w-lg leading-snug">{profile.bio}</p>}
 
-              {/* Stats — wrap gracefully on narrow screens */}
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                 {profile.location && (
                   <span className="flex items-center gap-1">
@@ -204,12 +317,8 @@ export default function ProfilePage() {
                   </span>
                 )}
                 {profile.website && (
-                  <a
-                    href={profile.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-primary hover:underline min-h-0 min-w-0 h-auto"
-                  >
+                  <a href={profile.website} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-primary hover:underline min-h-0 min-w-0 h-auto">
                     <Globe className="w-3.5 h-3.5 shrink-0" />
                     {profile.website.replace(/^https?:\/\//, "")}
                   </a>
@@ -224,7 +333,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex gap-2 shrink-0">
-              {profile.isMe ? (
+              {isMe ? (
                 <EditProfileDialog user={profile} onSaved={setProfileData} />
               ) : (
                 <Button
@@ -247,10 +356,10 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Posts — full width on mobile, 2-col on desktop */}
+      {/* Posts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-6">
         <div className="lg:col-span-2 space-y-3 sm:space-y-4">
-          {profile.isMe && <PostComposer />}
+          {isMe && <PostComposer />}
           {postsLoading ? (
             <Card className="rounded-none sm:rounded-xl border-x-0 sm:border-x">
               <CardContent className="p-8 text-center">
