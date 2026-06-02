@@ -3,27 +3,27 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── Social platform palette: clean white/slate with cobalt-blue accent ── */
+  /* ── Social platform palette: soft purple/violet ── */
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 20% 10%;
+    --background: 270 20% 97%;
+    --foreground: 270 20% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 270 20% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --primary: 221 83% 53%;
+    --popover-foreground: 270 20% 10%;
+    --primary: 262 60% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 94%;
-    --secondary-foreground: 220 20% 20%;
-    --muted: 220 14% 92%;
-    --muted-foreground: 220 10% 46%;
-    --accent: 221 83% 95%;
-    --accent-foreground: 221 83% 35%;
+    --secondary: 270 14% 94%;
+    --secondary-foreground: 270 20% 20%;
+    --muted: 270 14% 92%;
+    --muted-foreground: 270 10% 46%;
+    --accent: 262 60% 95%;
+    --accent-foreground: 262 60% 35%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 88%;
-    --input: 220 13% 88%;
-    --ring: 221 83% 53%;
+    --border: 270 13% 88%;
+    --input: 270 13% 88%;
+    --ring: 262 60% 58%;
     --radius: 0.625rem;
 
     /* Safe-area insets (filled in by env() on real devices) */
@@ -33,14 +33,14 @@
     --safe-right: env(safe-area-inset-right, 0px);
 
     /* Sidebar */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 20% 10%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-background: 270 20% 98%;
+    --sidebar-foreground: 270 20% 10%;
+    --sidebar-primary: 262 60% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 221 83% 95%;
-    --sidebar-accent-foreground: 221 83% 35%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-accent: 262 60% 95%;
+    --sidebar-accent-foreground: 262 60% 35%;
+    --sidebar-border: 270 13% 88%;
+    --sidebar-ring: 262 60% 58%;
 
     /* Bottom nav height used by multiple components */
     --bottom-nav-h: 56px;
@@ -48,34 +48,34 @@
   }
 
   .dark {
-    --background: 220 20% 10%;
-    --foreground: 220 14% 90%;
-    --card: 220 18% 14%;
-    --card-foreground: 220 14% 90%;
-    --popover: 220 18% 14%;
-    --popover-foreground: 220 14% 90%;
-    --primary: 217 91% 60%;
+    --background: 262 25% 8%;
+    --foreground: 270 14% 92%;
+    --card: 262 22% 12%;
+    --card-foreground: 270 14% 92%;
+    --popover: 262 22% 12%;
+    --popover-foreground: 270 14% 92%;
+    --primary: 262 60% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 16% 18%;
-    --secondary-foreground: 220 14% 80%;
-    --muted: 220 16% 20%;
-    --muted-foreground: 220 10% 55%;
-    --accent: 221 60% 20%;
-    --accent-foreground: 217 91% 70%;
+    --secondary: 262 18% 18%;
+    --secondary-foreground: 270 14% 80%;
+    --muted: 262 18% 20%;
+    --muted-foreground: 270 10% 55%;
+    --accent: 262 40% 22%;
+    --accent-foreground: 262 60% 75%;
     --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 14% 22%;
-    --input: 220 14% 22%;
-    --ring: 217 91% 60%;
+    --border: 262 16% 22%;
+    --input: 262 16% 22%;
+    --ring: 262 60% 65%;
 
-    --sidebar-background: 220 18% 14%;
-    --sidebar-foreground: 220 14% 90%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 262 22% 10%;
+    --sidebar-foreground: 270 14% 92%;
+    --sidebar-primary: 262 60% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 221 60% 20%;
-    --sidebar-accent-foreground: 217 91% 70%;
-    --sidebar-border: 220 14% 22%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 262 40% 22%;
+    --sidebar-accent-foreground: 262 60% 75%;
+    --sidebar-border: 262 16% 22%;
+    --sidebar-ring: 262 60% 65%;
   }
 }
 
@@ -205,12 +205,12 @@
 
 /* ── Cover photo gradient ───────────────────────────────────────────── */
 .cover-gradient {
-  background: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(240 60% 60%) 100%);
+  background: linear-gradient(135deg, hsl(262 60% 45%) 0%, hsl(290 50% 55%) 100%);
 }
 
 /* ── Story ring ─────────────────────────────────────────────────────── */
 .story-ring {
-  background: linear-gradient(45deg, hsl(221 83% 53%), hsl(280 70% 60%));
+  background: linear-gradient(45deg, hsl(262 60% 55%), hsl(290 60% 65%));
   padding: 2px;
   border-radius: 9999px;
 }
