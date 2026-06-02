@@ -75,7 +75,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
 
           {/* Logo */}
-          <a href="/#/" className="flex items-center gap-2 shrink-0 min-h-0 min-w-0">
+          <a href="https://www.jmfcool.org" target="_blank" rel="noreferrer" className="flex items-center gap-2 shrink-0 min-h-0 min-w-0">
             <NexusLogo />
             <span className="font-bold text-base text-foreground hidden sm:block">Nexus</span>
           </a>
