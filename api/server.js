@@ -34323,7 +34323,7 @@ var dbReady = initTables().catch((err) => {
 var storage = {
   // ── Users ──────────────────────────────────────────────────────────────────
   async createUser(data) {
-    const rows = await db.insert(users).values(data).returning();
+    const rows = await db.insert(users).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getUserById(id) {
@@ -34356,7 +34356,7 @@ var storage = {
   },
   // ── Sessions ───────────────────────────────────────────────────────────────
   async createSession(data) {
-    const rows = await db.insert(sessions).values(data).returning();
+    const rows = await db.insert(sessions).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getSessionByToken(token) {
@@ -34368,7 +34368,7 @@ var storage = {
   },
   // ── Posts ──────────────────────────────────────────────────────────────────
   async createPost(data) {
-    const rows = await db.insert(posts).values(data).returning();
+    const rows = await db.insert(posts).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getPostById(id) {
@@ -34387,7 +34387,7 @@ var storage = {
   },
   // ── Comments ───────────────────────────────────────────────────────────────
   async createComment(data) {
-    const rows = await db.insert(comments).values(data).returning();
+    const rows = await db.insert(comments).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getCommentsByPost(postId) {
@@ -34398,7 +34398,7 @@ var storage = {
   },
   // ── Likes ──────────────────────────────────────────────────────────────────
   async addLike(data) {
-    const rows = await db.insert(likes).values(data).returning();
+    const rows = await db.insert(likes).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async removeLike(postId, userId) {
@@ -34413,7 +34413,7 @@ var storage = {
   },
   // ── Friendships ────────────────────────────────────────────────────────────
   async sendFriendRequest(data) {
-    const rows = await db.insert(friendships).values(data).returning();
+    const rows = await db.insert(friendships).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getFriendship(userId1, userId2) {
@@ -34442,7 +34442,7 @@ var storage = {
   },
   // ── Notifications ──────────────────────────────────────────────────────────
   async createNotification(data) {
-    const rows = await db.insert(notifications).values(data).returning();
+    const rows = await db.insert(notifications).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getNotifications(userId) {
@@ -34457,7 +34457,7 @@ var storage = {
   },
   // ── Security Events ────────────────────────────────────────────────────────
   async logSecurityEvent(data) {
-    const rows = await db.insert(securityEvents).values(data).returning();
+    const rows = await db.insert(securityEvents).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
     return rows[0];
   },
   async getSecurityEvents(limit = 200) {
