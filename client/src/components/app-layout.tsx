@@ -147,13 +147,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <a href="https://resume.jmfcool.org" target="_blank" className="min-h-0 min-w-0 w-full cursor-pointer">
-                    <User className="w-4 h-4 mr-2" />
-                    Resume
-                  </a>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive cursor-pointer"
                   onClick={logout}
