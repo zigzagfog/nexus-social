@@ -154,12 +154,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <LogOut className="w-4 h-4 mr-2" />
                   Log out
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="https://www.jmfcool.org" target="_blank" className="min-h-0 min-w-0 w-full cursor-pointer">
-                    <Globe className="w-4 h-4 mr-2" />
-                    Home
-                  </a>
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
