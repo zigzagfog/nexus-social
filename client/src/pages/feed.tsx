@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import PostComposer from "@/components/post-composer";
 import PostCard from "@/components/post-card";
+import StoriesBar from "@/components/stories-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,10 @@ export default function FeedPage() {
 
         {/* Main feed — full width on mobile */}
         <div className="lg:col-span-6 space-y-3 sm:space-y-4">
+          {/* Stories */}
+          <div className="rounded-none sm:rounded-xl overflow-hidden" style={{ background: "#fff", border: "1px solid #E0DCD7" }}>
+            <StoriesBar />
+          </div>
           <PostComposer />
           {isLoading ? (
             <FeedSkeleton />

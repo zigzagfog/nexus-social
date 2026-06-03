@@ -861,6 +861,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
   // ── Messenger + Presence routes ───────────────────────────────────────────
   registerMessengerRoutes(app);
+  registerStoryRoutes(app);
 
   // ── Global exception handler — catches any unhandled route errors ───────────
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
@@ -1046,5 +1047,77 @@ export function registerMessengerRoutes(app: Express) {
   app.patch("/api/messenger/messages/:id/read", requireAuth, async (req: Request, res: Response) => {
     await storage.markDirectMessageRead(Number(req.params.id));
     res.json({ ok: true });
+  });
+}
+
+// ─── Stories Routes (appended) ────────────────────────────────────────────────
+export function registerStoryRoutes(app: Express) {
+
+  // GET /api/stories — active stories from self + friends
+  app.get("/api/stories", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as number;
+      const friendIds = await storage.getFriends(userId);
+      const allStories = await storage.getActiveStories(friendIds, userId);
+      // Attach viewer info
+      const users = await Promise.all(
+        Array.from(new Set(allStories.map((s: any) => s.userId))).map(id => storage.getUserById(id))
+      );
+      const userMap: Record<number, any> = {};
+      for (const u of users) if (u) userMap[u.id] = { id: u.id, username: u.username, avatarUrl: u.avatarUrl };
+      res.json(allStories.map(s => ({ ...s, user: userMap[s.userId] ?? null })));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/stories — create a story
+  app.post("/api/stories", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as number;
+      const { type, mediaUrl, content, bgColor } = req.body;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const story = await storage.createStory({ userId, type: type ?? "text", mediaUrl, content, bgColor, expiresAt });
+      res.status(201).json(story);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/stories/:id
+  app.delete("/api/stories/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as number;
+      const id = parseInt(String(req.params.id));
+      const [story] = await Promise.resolve([await storage.getUserStories(userId)]).then(([s]) => s.filter(x => x.id === id));
+      if (!story) return res.status(404).json({ error: "Not found" });
+      await storage.deleteStory(id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/stories/:id/view — mark story viewed
+  app.post("/api/stories/:id/view", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const viewerId = (req as any).userId as number;
+      const storyId = parseInt(String(req.params.id));
+      await storage.recordStoryView(storyId, viewerId);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/stories/:id/views — who viewed my story
+  app.get("/api/stories/:id/views", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const storyId = parseInt(String(req.params.id));
+      const views = await storage.getStoryViews(storyId);
+      res.json(views);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 }

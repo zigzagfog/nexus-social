@@ -187,3 +187,34 @@ export const userPresence = sqliteTable("user_presence", {
   lastHeartbeat: text("last_heartbeat").notNull().$defaultFn(() => new Date().toISOString()),
 });
 export type UserPresence = typeof userPresence.$inferSelect;
+
+// ─── Stories ──────────────────────────────────────────────────────────────────
+// 24-hour ephemeral stories — image or text card, auto-expire after 24h
+
+export const stories = sqliteTable("stories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  // "image" or "text"
+  type: text("type").notNull().default("text"),
+  // For image stories: URL of uploaded media. For text stories: null.
+  mediaUrl: text("media_url"),
+  // Caption or full text content
+  content: text("content"),
+  // Background color for text stories (hex), e.g. "#F6A61E"
+  bgColor: text("bg_color").notNull().default("#F6A61E"),
+  // ISO string — story expires 24h after creation
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export const insertStorySchema = createInsertSchema(stories).omit({ id: true, createdAt: true });
+export type InsertStory = z.infer<typeof insertStorySchema>;
+export type Story = typeof stories.$inferSelect;
+
+// Track which users have viewed which stories
+export const storyViews = sqliteTable("story_views", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  storyId: integer("story_id").notNull(),
+  viewerId: integer("viewer_id").notNull(),
+  viewedAt: text("viewed_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export type StoryView = typeof storyViews.$inferSelect;

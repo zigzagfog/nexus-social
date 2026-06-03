@@ -3,10 +3,11 @@
 // option for serverless functions where WebSocket connections may be restricted.
 import { drizzle } from "drizzle-orm/libsql/http";
 import { createClient } from "@libsql/client/http";
-import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
+import { eq, or, and, desc, ne, inArray, gt, sql } from "drizzle-orm";
 import {
   users, posts, comments, likes, friendships, notifications, sessions, securityEvents, passwordResetTokens,
   conversations, directMessages, userPublicKeys, userPresence,
+  stories, storyViews, Story, InsertStory, StoryView,
   type User, type InsertUser,
   type Post, type InsertPost,
   type Comment, type InsertComment,
@@ -246,6 +247,15 @@ export interface IStorage {
   getPresence(userId: number): Promise<UserPresence | undefined>;
   getAllPresence(): Promise<UserPresence[]>;
   sweepStalePresence(thresholdMs: number): Promise<void>;
+
+  // Stories
+  createStory(data: InsertStory): Promise<Story>;
+  getActiveStories(friendIds: number[], selfId: number): Promise<Story[]>;
+  getUserStories(userId: number): Promise<Story[]>;
+  deleteStory(id: number): Promise<void>;
+  recordStoryView(storyId: number, viewerId: number): Promise<void>;
+  getStoryViews(storyId: number): Promise<StoryView[]>;
+  deleteExpiredStories(): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -551,5 +561,70 @@ export const storage: IStorage = {
     for (const p of stale) {
       await db.update(userPresence).set({ status: "offline" }).where(eq(userPresence.userId, p.userId));
     }
+  },
+
+  // ── Stories ────────────────────────────────────────────────────────────────
+
+  async createStory(data: InsertStory): Promise<Story> {
+    const db = getDb();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const [row] = await db.insert(stories).values({
+      userId: data.userId,
+      type: data.type ?? "text",
+      mediaUrl: data.mediaUrl ?? null,
+      content: data.content ?? null,
+      bgColor: data.bgColor ?? "#F6A61E",
+      expiresAt: data.expiresAt ?? expiresAt,
+    }).returning();
+    return row;
+  },
+
+  async getActiveStories(friendIds: number[], selfId: number): Promise<Story[]> {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const ids = [...friendIds, selfId];
+    if (ids.length === 0) return [];
+    return db.select().from(stories)
+      .where(and(
+        inArray(stories.userId, ids),
+        gt(stories.expiresAt, now),
+      ))
+      .orderBy(desc(stories.createdAt));
+  },
+
+  async getUserStories(userId: number): Promise<Story[]> {
+    const db = getDb();
+    const now = new Date().toISOString();
+    return db.select().from(stories)
+      .where(and(eq(stories.userId, userId), gt(stories.expiresAt, now)))
+      .orderBy(desc(stories.createdAt));
+  },
+
+  async deleteStory(id: number): Promise<void> {
+    const db = getDb();
+    await db.delete(stories).where(eq(stories.id, id));
+  },
+
+  async recordStoryView(storyId: number, viewerId: number): Promise<void> {
+    const db = getDb();
+    const existing = await db.select().from(storyViews)
+      .where(and(eq(storyViews.storyId, storyId), eq(storyViews.viewerId, viewerId)))
+      .limit(1);
+    if (existing.length === 0) {
+      await db.insert(storyViews).values({ storyId, viewerId });
+    }
+  },
+
+  async getStoryViews(storyId: number): Promise<StoryView[]> {
+    const db = getDb();
+    return db.select().from(storyViews)
+      .where(eq(storyViews.storyId, storyId))
+      .orderBy(desc(storyViews.viewedAt));
+  },
+
+  async deleteExpiredStories(): Promise<void> {
+    const db = getDb();
+    const now = new Date().toISOString();
+    await db.delete(stories).where(sql`${stories.expiresAt} <= ${now}`);
   },
 };

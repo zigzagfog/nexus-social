@@ -34227,6 +34227,54 @@ var passwordResetTokens = sqliteTable("password_reset_tokens", {
   createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
 });
 var insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
+var conversations = sqliteTable("conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  // JSON array of participant user IDs, e.g. "[1,2]"
+  participantIds: text("participant_ids").notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
+var directMessages = sqliteTable("direct_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  conversationId: integer("conversation_id").notNull(),
+  senderId: integer("sender_id").notNull(),
+  encryptedPayload: text("encrypted_payload").notNull(),
+  readAt: text("read_at"),
+  createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, createdAt: true });
+var userPublicKeys = sqliteTable("user_public_keys", {
+  userId: integer("user_id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var userPresence = sqliteTable("user_presence", {
+  userId: integer("user_id").primaryKey(),
+  status: text("status").notNull().default("offline"),
+  lastHeartbeat: text("last_heartbeat").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var stories = sqliteTable("stories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  // "image" or "text"
+  type: text("type").notNull().default("text"),
+  // For image stories: URL of uploaded media. For text stories: null.
+  mediaUrl: text("media_url"),
+  // Caption or full text content
+  content: text("content"),
+  // Background color for text stories (hex), e.g. "#F6A61E"
+  bgColor: text("bg_color").notNull().default("#F6A61E"),
+  // ISO string — story expires 24h after creation
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
+var insertStorySchema = createInsertSchema(stories).omit({ id: true, createdAt: true });
+var storyViews = sqliteTable("story_views", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  storyId: integer("story_id").notNull(),
+  viewerId: integer("viewer_id").notNull(),
+  viewedAt: text("viewed_at").notNull().$defaultFn(() => (/* @__PURE__ */ new Date()).toISOString())
+});
 
 // server/storage.ts
 var _client = null;
@@ -34331,6 +34379,30 @@ async function initTables() {
       expires_at TEXT NOT NULL,
       used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
+    )`,
+    // ── Messenger tables ──────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      participant_ids TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS direct_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      sender_id INTEGER NOT NULL,
+      encrypted_payload TEXT NOT NULL,
+      read_at TEXT,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_public_keys (
+      user_id INTEGER PRIMARY KEY,
+      public_key TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_presence (
+      user_id INTEGER PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'offline',
+      last_heartbeat TEXT NOT NULL
     )`
   ];
   const client = _client ?? (getDb(), _client);
@@ -34517,6 +34589,134 @@ var storage = {
   },
   async updateUserPassword(userId, hashedPassword) {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+  },
+  // ── Messenger ────────────────────────────────────────────────────────────────
+  async getOrCreateConversation(userAId, userBId) {
+    const db2 = getDb();
+    const all = await db2.select().from(conversations).all();
+    const existing = all.find((c) => {
+      const ids = JSON.parse(c.participantIds);
+      return ids.includes(userAId) && ids.includes(userBId);
+    });
+    if (existing) return existing;
+    const rows = await db2.insert(conversations).values({ participantIds: JSON.stringify([userAId, userBId]), createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
+    return rows[0];
+  },
+  async getUserConversations(userId) {
+    const db2 = getDb();
+    const all = await db2.select().from(conversations).all();
+    return all.filter((c) => {
+      const ids = JSON.parse(c.participantIds);
+      return ids.includes(userId);
+    });
+  },
+  async getConversation(id) {
+    const db2 = getDb();
+    const rows = await db2.select().from(conversations).where(eq(conversations.id, id));
+    return rows[0];
+  },
+  async getDirectMessages(conversationId) {
+    const db2 = getDb();
+    return db2.select().from(directMessages).where(eq(directMessages.conversationId, conversationId)).orderBy(directMessages.createdAt);
+  },
+  async createDirectMessage(data) {
+    const db2 = getDb();
+    const rows = await db2.insert(directMessages).values({ ...data, createdAt: (/* @__PURE__ */ new Date()).toISOString() }).returning();
+    return rows[0];
+  },
+  async markDirectMessageRead(id) {
+    const db2 = getDb();
+    await db2.update(directMessages).set({ readAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(directMessages.id, id));
+  },
+  async upsertPublicKey(userId, publicKey) {
+    const db2 = getDb();
+    const existing = await db2.select().from(userPublicKeys).where(eq(userPublicKeys.userId, userId));
+    if (existing.length) {
+      await db2.update(userPublicKeys).set({ publicKey, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(userPublicKeys.userId, userId));
+    } else {
+      await db2.insert(userPublicKeys).values({ userId, publicKey, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    }
+  },
+  async getPublicKey(userId) {
+    const db2 = getDb();
+    const rows = await db2.select().from(userPublicKeys).where(eq(userPublicKeys.userId, userId));
+    return rows[0];
+  },
+  async upsertPresence(userId, status) {
+    const db2 = getDb();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existing = await db2.select().from(userPresence).where(eq(userPresence.userId, userId));
+    if (existing.length) {
+      await db2.update(userPresence).set({ status, lastHeartbeat: now }).where(eq(userPresence.userId, userId));
+    } else {
+      await db2.insert(userPresence).values({ userId, status, lastHeartbeat: now });
+    }
+  },
+  async getPresence(userId) {
+    const db2 = getDb();
+    const rows = await db2.select().from(userPresence).where(eq(userPresence.userId, userId));
+    return rows[0];
+  },
+  async getAllPresence() {
+    const db2 = getDb();
+    return db2.select().from(userPresence);
+  },
+  async sweepStalePresence(thresholdMs) {
+    const db2 = getDb();
+    const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+    const stale = await db2.select().from(userPresence).where(and(ne(userPresence.status, "offline"), sql`${userPresence.lastHeartbeat} < ${cutoff}`));
+    for (const p of stale) {
+      await db2.update(userPresence).set({ status: "offline" }).where(eq(userPresence.userId, p.userId));
+    }
+  },
+  // ── Stories ────────────────────────────────────────────────────────────────
+  async createStory(data) {
+    const db2 = getDb();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3).toISOString();
+    const [row] = await db2.insert(stories).values({
+      userId: data.userId,
+      type: data.type ?? "text",
+      mediaUrl: data.mediaUrl ?? null,
+      content: data.content ?? null,
+      bgColor: data.bgColor ?? "#F6A61E",
+      expiresAt: data.expiresAt ?? expiresAt
+    }).returning();
+    return row;
+  },
+  async getActiveStories(friendIds, selfId) {
+    const db2 = getDb();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const ids = [...friendIds, selfId];
+    if (ids.length === 0) return [];
+    return db2.select().from(stories).where(and(
+      inArray(stories.userId, ids),
+      gt(stories.expiresAt, now)
+    )).orderBy(desc(stories.createdAt));
+  },
+  async getUserStories(userId) {
+    const db2 = getDb();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    return db2.select().from(stories).where(and(eq(stories.userId, userId), gt(stories.expiresAt, now))).orderBy(desc(stories.createdAt));
+  },
+  async deleteStory(id) {
+    const db2 = getDb();
+    await db2.delete(stories).where(eq(stories.id, id));
+  },
+  async recordStoryView(storyId, viewerId) {
+    const db2 = getDb();
+    const existing = await db2.select().from(storyViews).where(and(eq(storyViews.storyId, storyId), eq(storyViews.viewerId, viewerId))).limit(1);
+    if (existing.length === 0) {
+      await db2.insert(storyViews).values({ storyId, viewerId });
+    }
+  },
+  async getStoryViews(storyId) {
+    const db2 = getDb();
+    return db2.select().from(storyViews).where(eq(storyViews.storyId, storyId)).orderBy(desc(storyViews.viewedAt));
+  },
+  async deleteExpiredStories() {
+    const db2 = getDb();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    await db2.delete(stories).where(sql`${stories.expiresAt} <= ${now}`);
   }
 };
 
@@ -35243,6 +35443,8 @@ async function registerRoutes(httpServer, app) {
       res.status(500).json({ error: "Failed to load security events" });
     }
   });
+  registerMessengerRoutes(app);
+  registerStoryRoutes(app);
   app.use((err, req, res, _next) => {
     const ip = getClientIp(req);
     const ua = String(req.headers["user-agent"] ?? "");
@@ -35282,6 +35484,182 @@ async function registerRoutes(httpServer, app) {
     }).catch(() => {
     });
     res.status(404).json({ error: "Not found" });
+  });
+}
+function registerMessengerRoutes(app) {
+  const sseClients = /* @__PURE__ */ new Map();
+  function broadcastPresence() {
+    storage.getAllPresence().then((allPresence) => {
+      const map = Object.fromEntries(allPresence.map((p) => [p.userId, p.status]));
+      const payload = JSON.stringify({ type: "presence", data: map });
+      sseClients.forEach((res) => {
+        res.write(`data: ${payload}
+
+`);
+      });
+    });
+  }
+  setInterval(async () => {
+    await storage.sweepStalePresence(35e3);
+    broadcastPresence();
+  }, 3e4);
+  app.post("/api/messenger/public-key", requireAuth, async (req, res) => {
+    const user = req.user;
+    const { publicKey } = req.body;
+    if (!publicKey) return res.status(400).json({ error: "publicKey required" });
+    await storage.upsertPublicKey(user.id, publicKey);
+    res.json({ ok: true });
+  });
+  app.get("/api/messenger/public-key/:userId", requireAuth, async (req, res) => {
+    const row = await storage.getPublicKey(Number(req.params.userId));
+    if (!row) return res.status(404).json({ error: "No key for user" });
+    res.json({ publicKey: row.publicKey });
+  });
+  app.post("/api/messenger/presence", requireAuth, async (req, res) => {
+    const user = req.user;
+    const { status } = req.body;
+    if (!["online", "away", "offline"].includes(status)) return res.status(400).json({ error: "invalid status" });
+    await storage.upsertPresence(user.id, status);
+    broadcastPresence();
+    res.json({ ok: true });
+  });
+  app.get("/api/messenger/presence", requireAuth, async (_req, res) => {
+    const all = await storage.getAllPresence();
+    const map = Object.fromEntries(all.map((p) => [p.userId, p.status]));
+    res.json(map);
+  });
+  app.get("/api/messenger/sse", requireAuth, async (req, res) => {
+    const user = req.user;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    sseClients.set(user.id, res);
+    await storage.upsertPresence(user.id, "online");
+    broadcastPresence();
+    const all = await storage.getAllPresence();
+    const map = Object.fromEntries(all.map((p) => [p.userId, p.status]));
+    res.write(`data: ${JSON.stringify({ type: "presence", data: map })}
+
+`);
+    req.on("close", async () => {
+      sseClients.delete(user.id);
+      await storage.upsertPresence(user.id, "offline");
+      broadcastPresence();
+    });
+  });
+  function broadcastMessage(participantIds, msg) {
+    const payload = JSON.stringify({ type: "message", data: msg });
+    for (const uid of participantIds) {
+      sseClients.get(uid)?.write(`data: ${payload}
+
+`);
+    }
+  }
+  app.get("/api/messenger/conversations", requireAuth, async (req, res) => {
+    const user = req.user;
+    const convos = await storage.getUserConversations(user.id);
+    const enriched = await Promise.all(
+      convos.map(async (c) => {
+        const ids = JSON.parse(c.participantIds);
+        const participants = await Promise.all(ids.map((id) => storage.getUserById(id)));
+        return { ...c, participants: participants.filter(Boolean) };
+      })
+    );
+    res.json(enriched);
+  });
+  app.post("/api/messenger/conversations", requireAuth, async (req, res) => {
+    const user = req.user;
+    const { otherUserId } = req.body;
+    if (!otherUserId) return res.status(400).json({ error: "otherUserId required" });
+    const convo = await storage.getOrCreateConversation(user.id, otherUserId);
+    const ids = JSON.parse(convo.participantIds);
+    const participants = await Promise.all(ids.map((id) => storage.getUserById(id)));
+    res.json({ ...convo, participants: participants.filter(Boolean) });
+  });
+  app.get("/api/messenger/messages/:conversationId", requireAuth, async (req, res) => {
+    const user = req.user;
+    const convo = await storage.getConversation(Number(req.params.conversationId));
+    if (!convo) return res.status(404).json({ error: "Not found" });
+    const ids = JSON.parse(convo.participantIds);
+    if (!ids.includes(user.id)) return res.status(403).json({ error: "Forbidden" });
+    const msgs = await storage.getDirectMessages(Number(req.params.conversationId));
+    res.json(msgs);
+  });
+  app.post("/api/messenger/messages", requireAuth, async (req, res) => {
+    const user = req.user;
+    const { conversationId, encryptedPayload } = req.body;
+    if (!conversationId || !encryptedPayload) return res.status(400).json({ error: "missing fields" });
+    const convo = await storage.getConversation(conversationId);
+    if (!convo) return res.status(404).json({ error: "Conversation not found" });
+    const ids = JSON.parse(convo.participantIds);
+    if (!ids.includes(user.id)) return res.status(403).json({ error: "Forbidden" });
+    const msg = await storage.createDirectMessage({ conversationId, senderId: user.id, encryptedPayload });
+    broadcastMessage(ids, msg);
+    res.json(msg);
+  });
+  app.patch("/api/messenger/messages/:id/read", requireAuth, async (req, res) => {
+    await storage.markDirectMessageRead(Number(req.params.id));
+    res.json({ ok: true });
+  });
+}
+function registerStoryRoutes(app) {
+  app.get("/api/stories", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId;
+      const friendIds = await storage.getFriends(userId);
+      const allStories = await storage.getActiveStories(friendIds, userId);
+      const users2 = await Promise.all(
+        Array.from(new Set(allStories.map((s) => s.userId))).map((id) => storage.getUserById(id))
+      );
+      const userMap = {};
+      for (const u of users2) if (u) userMap[u.id] = { id: u.id, username: u.username, avatarUrl: u.avatarUrl };
+      res.json(allStories.map((s) => ({ ...s, user: userMap[s.userId] ?? null })));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.post("/api/stories", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId;
+      const { type, mediaUrl, content, bgColor } = req.body;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3).toISOString();
+      const story = await storage.createStory({ userId, type: type ?? "text", mediaUrl, content, bgColor, expiresAt });
+      res.status(201).json(story);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.delete("/api/stories/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId;
+      const id = parseInt(String(req.params.id));
+      const [story] = await Promise.resolve([await storage.getUserStories(userId)]).then(([s]) => s.filter((x) => x.id === id));
+      if (!story) return res.status(404).json({ error: "Not found" });
+      await storage.deleteStory(id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.post("/api/stories/:id/view", requireAuth, async (req, res) => {
+    try {
+      const viewerId = req.userId;
+      const storyId = parseInt(String(req.params.id));
+      await storage.recordStoryView(storyId, viewerId);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.get("/api/stories/:id/views", requireAuth, async (req, res) => {
+    try {
+      const storyId = parseInt(String(req.params.id));
+      const views = await storage.getStoryViews(storyId);
+      res.json(views);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 }
 
