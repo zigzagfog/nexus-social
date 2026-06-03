@@ -34826,7 +34826,7 @@ async function registerRoutes(httpServer, app) {
       if (!username || !displayName || !email || !password)
         return res.status(400).json({ error: "All fields required" });
       if (checkBruteForce(ip)) {
-        await storage.logSecurityEvent({
+        storage.logSecurityEvent({
           targetUserId: null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -34836,7 +34836,7 @@ async function registerRoutes(httpServer, app) {
           userAgent: ua,
           detail: `Registration rate-limit exceeded (>${BRUTE_MAX} attempts in ${BRUTE_WINDOW_MS / 6e4} min)`,
           blocked: 1
-        });
+        }).catch((e) => console.warn("[security-log]", e?.message));
         return res.status(429).json({ error: "Too many attempts \u2014 try again later." });
       }
       if (await storage.getUserByEmail(email))
@@ -34882,7 +34882,7 @@ async function registerRoutes(httpServer, app) {
     try {
       const { email, password } = req.body;
       if (checkBruteForce(ip)) {
-        await storage.logSecurityEvent({
+        storage.logSecurityEvent({
           targetUserId: null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -34892,13 +34892,13 @@ async function registerRoutes(httpServer, app) {
           userAgent: ua,
           detail: `Login rate-limit exceeded (>${BRUTE_MAX} attempts in ${BRUTE_WINDOW_MS / 6e4} min). Credential: ${email}`,
           blocked: 1
-        });
+        }).catch((e) => console.warn("[security-log]", e?.message));
         console.warn(`[SECURITY] Brute-force blocked: IP=${ip} email=${email}`);
         return res.status(429).json({ error: "Too many login attempts \u2014 try again in 15 minutes." });
       }
-      const user = await storage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
       if (!user || user.password !== hashPassword(password)) {
-        await storage.logSecurityEvent({
+        storage.logSecurityEvent({
           targetUserId: user?.id ?? null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -34908,7 +34908,7 @@ async function registerRoutes(httpServer, app) {
           userAgent: ua,
           detail: `Failed login attempt. Email: ${email}. User ${user ? "exists" : "not found"}.`,
           blocked: 1
-        });
+        }).catch((e) => console.warn("[security-log]", e?.message));
         return res.status(401).json({ error: "Invalid email or password" });
       }
       const token = generateToken();

@@ -136,7 +136,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       // Brute-force guard on registration too (prevents mass account creation)
       if (checkBruteForce(ip)) {
-        await storage.logSecurityEvent({
+        storage.logSecurityEvent({
           targetUserId: null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -146,7 +146,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           userAgent: ua,
           detail: `Registration rate-limit exceeded (>${BRUTE_MAX} attempts in ${BRUTE_WINDOW_MS / 60000} min)`,
           blocked: 1,
-        });
+        }).catch((e: any) => console.warn("[security-log]", e?.message));
         return res.status(429).json({ error: "Too many attempts — try again later." });
       }
 
@@ -202,7 +202,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       // ── Brute-force check ──────────────────────────────────────────────────
       if (checkBruteForce(ip)) {
-        await storage.logSecurityEvent({
+        storage.logSecurityEvent({
           targetUserId: null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -212,15 +212,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           userAgent: ua,
           detail: `Login rate-limit exceeded (>${BRUTE_MAX} attempts in ${BRUTE_WINDOW_MS / 60000} min). Credential: ${email}`,
           blocked: 1,
-        });
+        }).catch((e: any) => console.warn("[security-log]", e?.message));
         console.warn(`[SECURITY] Brute-force blocked: IP=${ip} email=${email}`);
         return res.status(429).json({ error: "Too many login attempts — try again in 15 minutes." });
       }
 
-      const user = await storage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
       if (!user || user.password !== hashPassword(password)) {
-        // Log every failed credential attempt
-        await storage.logSecurityEvent({
+        // Log failed attempt — non-fatal, DB errors must not block the 401 response
+        storage.logSecurityEvent({
           targetUserId: user?.id ?? null,
           claimedToken: null,
           presentedCredential: `email:${email}`,
@@ -230,7 +230,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
           userAgent: ua,
           detail: `Failed login attempt. Email: ${email}. User ${user ? "exists" : "not found"}.`,
           blocked: 1,
-        });
+        }).catch((e: any) => console.warn("[security-log]", e?.message));
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
