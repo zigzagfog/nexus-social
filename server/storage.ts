@@ -6,6 +6,7 @@ import { createClient } from "@libsql/client/http";
 import { eq, or, and, desc, ne, inArray, sql } from "drizzle-orm";
 import {
   users, posts, comments, likes, friendships, notifications, sessions, securityEvents, passwordResetTokens,
+  conversations, directMessages, userPublicKeys, userPresence,
   type User, type InsertUser,
   type Post, type InsertPost,
   type Comment, type InsertComment,
@@ -15,6 +16,9 @@ import {
   type Session, type InsertSession,
   type SecurityEvent, type InsertSecurityEvent,
   type PasswordResetToken,
+  type Conversation, type InsertConversation,
+  type DirectMessage, type InsertDirectMessage,
+  type UserPublicKey, type UserPresence,
 } from "@shared/schema";
 
 // ─── DB connection (lazy) ────────────────────────────────────────────────────
@@ -131,6 +135,30 @@ async function initTables() {
       used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     )`,
+    // ── Messenger tables ──────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      participant_ids TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS direct_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      sender_id INTEGER NOT NULL,
+      encrypted_payload TEXT NOT NULL,
+      read_at TEXT,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_public_keys (
+      user_id INTEGER PRIMARY KEY,
+      public_key TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_presence (
+      user_id INTEGER PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'offline',
+      last_heartbeat TEXT NOT NULL
+    )`,
   ];
   // Ensure DB is initialized before running table creation
   const client = _client ?? (getDb(), _client!);
@@ -204,6 +232,20 @@ export interface IStorage {
   getValidResetToken(userId: number, code: string): Promise<PasswordResetToken | undefined>;
   markResetTokenUsed(id: number): Promise<void>;
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
+
+  // ── Messenger ────────────────────────────────────────────────────────────────
+  getOrCreateConversation(userAId: number, userBId: number): Promise<Conversation>;
+  getUserConversations(userId: number): Promise<Conversation[]>;
+  getConversation(id: number): Promise<Conversation | undefined>;
+  getDirectMessages(conversationId: number): Promise<DirectMessage[]>;
+  createDirectMessage(data: InsertDirectMessage): Promise<DirectMessage>;
+  markDirectMessageRead(id: number): Promise<void>;
+  upsertPublicKey(userId: number, publicKey: string): Promise<void>;
+  getPublicKey(userId: number): Promise<UserPublicKey | undefined>;
+  upsertPresence(userId: number, status: string): Promise<void>;
+  getPresence(userId: number): Promise<UserPresence | undefined>;
+  getAllPresence(): Promise<UserPresence[]>;
+  sweepStalePresence(thresholdMs: number): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -424,5 +466,90 @@ export const storage: IStorage = {
   },
   async updateUserPassword(userId, hashedPassword) {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+  },
+
+  // ── Messenger ────────────────────────────────────────────────────────────────
+  async getOrCreateConversation(userAId, userBId) {
+    const db = getDb();
+    const all = await db.select().from(conversations).all();
+    const existing = all.find((c) => {
+      const ids: number[] = JSON.parse(c.participantIds);
+      return ids.includes(userAId) && ids.includes(userBId);
+    });
+    if (existing) return existing as Conversation;
+    const rows = await db.insert(conversations)
+      .values({ participantIds: JSON.stringify([userAId, userBId]), createdAt: new Date().toISOString() })
+      .returning();
+    return rows[0] as Conversation;
+  },
+  async getUserConversations(userId) {
+    const db = getDb();
+    const all = await db.select().from(conversations).all();
+    return all.filter((c) => {
+      const ids: number[] = JSON.parse(c.participantIds);
+      return ids.includes(userId);
+    }) as Conversation[];
+  },
+  async getConversation(id) {
+    const db = getDb();
+    const rows = await db.select().from(conversations).where(eq(conversations.id, id));
+    return rows[0] as Conversation | undefined;
+  },
+  async getDirectMessages(conversationId) {
+    const db = getDb();
+    return db.select().from(directMessages)
+      .where(eq(directMessages.conversationId, conversationId))
+      .orderBy(directMessages.createdAt) as Promise<DirectMessage[]>;
+  },
+  async createDirectMessage(data) {
+    const db = getDb();
+    const rows = await db.insert(directMessages).values({ ...data, createdAt: new Date().toISOString() }).returning();
+    return rows[0] as DirectMessage;
+  },
+  async markDirectMessageRead(id) {
+    const db = getDb();
+    await db.update(directMessages).set({ readAt: new Date().toISOString() }).where(eq(directMessages.id, id));
+  },
+  async upsertPublicKey(userId, publicKey) {
+    const db = getDb();
+    const existing = await db.select().from(userPublicKeys).where(eq(userPublicKeys.userId, userId));
+    if (existing.length) {
+      await db.update(userPublicKeys).set({ publicKey, updatedAt: new Date().toISOString() }).where(eq(userPublicKeys.userId, userId));
+    } else {
+      await db.insert(userPublicKeys).values({ userId, publicKey, updatedAt: new Date().toISOString() });
+    }
+  },
+  async getPublicKey(userId) {
+    const db = getDb();
+    const rows = await db.select().from(userPublicKeys).where(eq(userPublicKeys.userId, userId));
+    return rows[0] as UserPublicKey | undefined;
+  },
+  async upsertPresence(userId, status) {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const existing = await db.select().from(userPresence).where(eq(userPresence.userId, userId));
+    if (existing.length) {
+      await db.update(userPresence).set({ status, lastHeartbeat: now }).where(eq(userPresence.userId, userId));
+    } else {
+      await db.insert(userPresence).values({ userId, status, lastHeartbeat: now });
+    }
+  },
+  async getPresence(userId) {
+    const db = getDb();
+    const rows = await db.select().from(userPresence).where(eq(userPresence.userId, userId));
+    return rows[0] as UserPresence | undefined;
+  },
+  async getAllPresence() {
+    const db = getDb();
+    return db.select().from(userPresence) as Promise<UserPresence[]>;
+  },
+  async sweepStalePresence(thresholdMs) {
+    const db = getDb();
+    const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+    const stale = await db.select().from(userPresence)
+      .where(and(ne(userPresence.status, "offline"), sql`${userPresence.lastHeartbeat} < ${cutoff}`));
+    for (const p of stale) {
+      await db.update(userPresence).set({ status: "offline" }).where(eq(userPresence.userId, p.userId));
+    }
   },
 };

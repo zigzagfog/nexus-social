@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Home, Users, Bell, Search, LogOut, User, Moon, Sun, Globe } from "lucide-react";
+import { Home, Users, Bell, Search, MessageSquare, LogOut, User, Moon, Sun } from "lucide-react";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -59,10 +59,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const unreadCount = (unreadData as any)?.count ?? 0;
 
   const navItems = [
-    { path: "/#/",             hashPath: "/",             icon: Home,  label: "Home" },
-    { path: "/#/friends",      hashPath: "/friends",      icon: Users, label: "Friends" },
-    { path: "/#/notifications",hashPath: "/notifications",icon: Bell,  label: "Alerts", badge: unreadCount },
-    { path: "/#/search",       hashPath: "/search",       icon: Search,label: "Search" },
+    { path: "/#/",              hashPath: "/",              icon: Home,           label: "Home"     },
+    { path: "/#/friends",       hashPath: "/friends",       icon: Users,          label: "Friends"  },
+    { path: "/#/messages",      hashPath: "/messages",      icon: MessageSquare,  label: "Messages" },
+    { path: "/#/notifications", hashPath: "/notifications", icon: Bell,           label: "Alerts",  badge: unreadCount },
+    { path: "/#/search",        hashPath: "/search",        icon: Search,         label: "Search"   },
   ];
 
   const initials = user?.displayName?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";

@@ -11,9 +11,11 @@ import ProfilePage from "@/pages/profile";
 import FriendsPage from "@/pages/friends";
 import NotificationsPage from "@/pages/notifications";
 import SearchPage from "@/pages/search";
+import MessagesPage from "@/pages/messages";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/app-layout";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { CryptoProvider } from "@/lib/cryptoContext";
 import { useEffect } from "react";
 
 function RedirectToHome() {
@@ -52,6 +54,7 @@ function AppRouter() {
         <Route path="/friends" component={FriendsPage} />
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/search" component={SearchPage} />
+        <Route path="/messages" component={MessagesPage} />
         {/* Redirect any unknown path (including /auth) back to feed */}
         <Route component={RedirectToHome} />
       </Switch>
@@ -67,8 +70,10 @@ export default function App() {
           {/* Router lives at the very top so all children share one hash location */}
           <Router hook={useHashLocation}>
             <AuthProvider>
-              <AppRouter />
-              <Toaster />
+              <CryptoProvider>
+                <AppRouter />
+                <Toaster />
+              </CryptoProvider>
             </AuthProvider>
           </Router>
         </TooltipProvider>

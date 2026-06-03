@@ -859,6 +859,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       res.status(500).json({ error: "Failed to load security events" });
     }
   });
+  // ── Messenger + Presence routes ───────────────────────────────────────────
+  registerMessengerRoutes(app);
+
   // ── Global exception handler — catches any unhandled route errors ───────────
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const ip = getClientIp(req);
@@ -903,4 +906,145 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
 
+}
+
+// ─── Messenger + Presence (appended) ─────────────────────────────────────────
+// NOTE: These routes are registered at module level below registerRoutes().
+// Call registerMessengerRoutes(app) from registerRoutes().
+export function registerMessengerRoutes(app: Express) {
+  // SSE clients: userId → Response
+  const sseClients = new Map<number, Response>();
+
+  function broadcastPresence() {
+    storage.getAllPresence().then((allPresence) => {
+      const map = Object.fromEntries(allPresence.map((p) => [p.userId, p.status]));
+      const payload = JSON.stringify({ type: "presence", data: map });
+      sseClients.forEach((res) => {
+        res.write(`data: ${payload}\n\n`);
+      });
+    });
+  }
+
+  // Sweep stale presence every 30 s
+  setInterval(async () => {
+    await storage.sweepStalePresence(35_000);
+    broadcastPresence();
+  }, 30_000);
+
+  // ── Public key exchange ────────────────────────────────────────────────────
+  app.post("/api/messenger/public-key", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const { publicKey } = req.body as { publicKey: string };
+    if (!publicKey) return res.status(400).json({ error: "publicKey required" });
+    await storage.upsertPublicKey(user.id, publicKey);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/messenger/public-key/:userId", requireAuth, async (req: Request, res: Response) => {
+    const row = await storage.getPublicKey(Number(req.params.userId));
+    if (!row) return res.status(404).json({ error: "No key for user" });
+    res.json({ publicKey: row.publicKey });
+  });
+
+  // ── Presence heartbeat ─────────────────────────────────────────────────────
+  app.post("/api/messenger/presence", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const { status } = req.body as { status: "online" | "away" | "offline" };
+    if (!["online", "away", "offline"].includes(status)) return res.status(400).json({ error: "invalid status" });
+    await storage.upsertPresence(user.id, status);
+    broadcastPresence();
+    res.json({ ok: true });
+  });
+
+  app.get("/api/messenger/presence", requireAuth, async (_req: Request, res: Response) => {
+    const all = await storage.getAllPresence();
+    const map = Object.fromEntries(all.map((p) => [p.userId, p.status]));
+    res.json(map);
+  });
+
+  // ── SSE stream — one per logged-in user ────────────────────────────────────
+  app.get("/api/messenger/sse", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    sseClients.set(user.id, res);
+    await storage.upsertPresence(user.id, "online");
+    broadcastPresence();
+
+    // Send initial presence snapshot
+    const all = await storage.getAllPresence();
+    const map = Object.fromEntries(all.map((p) => [p.userId, p.status]));
+    res.write(`data: ${JSON.stringify({ type: "presence", data: map })}\n\n`);
+
+    req.on("close", async () => {
+      sseClients.delete(user.id);
+      await storage.upsertPresence(user.id, "offline");
+      broadcastPresence();
+    });
+  });
+
+  // Helper: broadcast new DM to conversation participants via SSE
+  function broadcastMessage(participantIds: number[], msg: object) {
+    const payload = JSON.stringify({ type: "message", data: msg });
+    for (const uid of participantIds) {
+      sseClients.get(uid)?.write(`data: ${payload}\n\n`);
+    }
+  }
+
+  // ── Conversations ──────────────────────────────────────────────────────────
+  app.get("/api/messenger/conversations", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const convos = await storage.getUserConversations(user.id);
+    // Enrich with participant user objects
+    const enriched = await Promise.all(
+      convos.map(async (c) => {
+        const ids: number[] = JSON.parse(c.participantIds);
+        const participants = await Promise.all(ids.map((id) => storage.getUserById(id)));
+        return { ...c, participants: participants.filter(Boolean) };
+      })
+    );
+    res.json(enriched);
+  });
+
+  app.post("/api/messenger/conversations", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const { otherUserId } = req.body as { otherUserId: number };
+    if (!otherUserId) return res.status(400).json({ error: "otherUserId required" });
+    const convo = await storage.getOrCreateConversation(user.id, otherUserId);
+    const ids: number[] = JSON.parse(convo.participantIds);
+    const participants = await Promise.all(ids.map((id) => storage.getUserById(id)));
+    res.json({ ...convo, participants: participants.filter(Boolean) });
+  });
+
+  // ── Messages ───────────────────────────────────────────────────────────────
+  app.get("/api/messenger/messages/:conversationId", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const convo = await storage.getConversation(Number(req.params.conversationId));
+    if (!convo) return res.status(404).json({ error: "Not found" });
+    const ids: number[] = JSON.parse(convo.participantIds);
+    if (!ids.includes(user.id)) return res.status(403).json({ error: "Forbidden" });
+    const msgs = await storage.getDirectMessages(Number(req.params.conversationId));
+    res.json(msgs);
+  });
+
+  app.post("/api/messenger/messages", requireAuth, async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const { conversationId, encryptedPayload } = req.body as { conversationId: number; encryptedPayload: string };
+    if (!conversationId || !encryptedPayload) return res.status(400).json({ error: "missing fields" });
+    const convo = await storage.getConversation(conversationId);
+    if (!convo) return res.status(404).json({ error: "Conversation not found" });
+    const ids: number[] = JSON.parse(convo.participantIds);
+    if (!ids.includes(user.id)) return res.status(403).json({ error: "Forbidden" });
+    const msg = await storage.createDirectMessage({ conversationId, senderId: user.id, encryptedPayload });
+    broadcastMessage(ids, msg);
+    res.json(msg);
+  });
+
+  app.patch("/api/messenger/messages/:id/read", requireAuth, async (req: Request, res: Response) => {
+    await storage.markDirectMessageRead(Number(req.params.id));
+    res.json({ ok: true });
+  });
 }

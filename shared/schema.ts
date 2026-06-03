@@ -144,3 +144,46 @@ export const passwordResetTokens = sqliteTable("password_reset_tokens", {
 export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+// ─── Messenger ────────────────────────────────────────────────────────────────
+
+export const conversations = sqliteTable("conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  // JSON array of participant user IDs, e.g. "[1,2]"
+  participantIds: text("participant_ids").notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+
+// encryptedPayload: JSON string containing { iv, ciphertext, wrappedKeys }
+// The server stores the ciphertext only — plaintext never touches the server.
+export const directMessages = sqliteTable("direct_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  conversationId: integer("conversation_id").notNull(),
+  senderId: integer("sender_id").notNull(),
+  encryptedPayload: text("encrypted_payload").notNull(),
+  readAt: text("read_at"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, createdAt: true });
+export type InsertDirectMessage = z.infer<typeof insertDirectMessageSchema>;
+export type DirectMessage = typeof directMessages.$inferSelect;
+
+// RSA-OAEP public key per user — stored as JWK JSON string
+// Allows recipients to encrypt messages for the key owner
+export const userPublicKeys = sqliteTable("user_public_keys", {
+  userId: integer("user_id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export type UserPublicKey = typeof userPublicKeys.$inferSelect;
+
+// Presence: online | away | offline — updated via SSE heartbeat
+export const userPresence = sqliteTable("user_presence", {
+  userId: integer("user_id").primaryKey(),
+  status: text("status").notNull().default("offline"),
+  lastHeartbeat: text("last_heartbeat").notNull().$defaultFn(() => new Date().toISOString()),
+});
+export type UserPresence = typeof userPresence.$inferSelect;
