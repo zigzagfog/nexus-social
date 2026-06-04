@@ -49,7 +49,7 @@ function NexusLogo() {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const { data: unreadData } = useQuery({
     queryKey: ["/api/notifications/unread-count"],
@@ -179,6 +179,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <a
                 key={item.hashPath}
                 href={item.path}
+                onClick={(e) => { e.preventDefault(); setLocation(item.hashPath); }}
                 className="flex-1 flex flex-col items-center justify-center gap-0.5 relative min-h-0 min-w-0 active:bg-muted/50 transition-colors"
                 data-testid={`button-mobile-nav-${item.label.toLowerCase()}`}
               >
@@ -197,6 +198,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Profile tab */}
           <a
             href={`/#/profile/${user?.id}`}
+            onClick={(e) => { e.preventDefault(); setLocation(`/profile/${user?.id}`); }}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-0 min-w-0 active:bg-muted/50 transition-colors"
           >
             <Avatar className="w-6 h-6">
