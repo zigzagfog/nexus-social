@@ -54,7 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
 
-    fetch("/api/auth/me", {
+    const meBase = window.location.hostname === 'nexus.jmfcool.org' ? 'https://nexus-social-1hbh.onrender.com' : '';
+    fetch(`${meBase}/api/auth/me`, {
       headers: _sessionToken ? { Authorization: `Bearer ${_sessionToken}` } : {},
       signal: controller.signal,
     })

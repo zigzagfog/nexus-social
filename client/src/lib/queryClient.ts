@@ -1,9 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { getSessionToken } from "./auth";
 
-// On Vercel (and locally), the frontend and API are served from the same domain.
-// All API calls use plain relative /api/ paths — no proxy URL needed.
-const API_BASE = "";
+// On Render, frontend and backend are on the same server.
+// If served via custom domain (nexus.jmfcool.org), point API calls directly to Render.
+const API_BASE = window.location.hostname === 'nexus.jmfcool.org'
+  ? 'https://nexus-social-1hbh.onrender.com'
+  : '';
 
 // 20-second timeout on all API requests — prevents the loading screen from
 // hanging forever if Vercel's function doesn't respond.
