@@ -7,38 +7,38 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { UserCheck, UserX, Users } from "lucide-react";
+import { useLocation } from "wouter";
 
 function FriendCard({ user }: { user: any }) {
+  const [, setLocation] = useLocation();
   const initials = user.displayName?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) ?? "?";
+  const goToProfile = () => setLocation(`/profile/${user.id}`);
   return (
     <Card
       className="rounded-none sm:rounded-xl border-x-0 sm:border-x shadow-sm hover-elevate"
       data-testid={`card-friend-${user.id}`}
     >
       <CardContent className="p-3 sm:p-4 flex items-center gap-3">
-        <a href={`/#/profile/${user.id}`} className="shrink-0">
-          <Avatar className="w-12 h-12 cursor-pointer">
+        <div className="shrink-0 cursor-pointer" onClick={goToProfile}>
+          <Avatar className="w-12 h-12">
             <AvatarImage src={user.avatarUrl || ""} />
             <AvatarFallback className="bg-primary text-primary-foreground font-semibold">{initials}</AvatarFallback>
           </Avatar>
-        </a>
-        <div className="flex-1 min-w-0">
-          <a href={`/#/profile/${user.id}`}>
-            <p className="font-semibold text-sm hover:underline cursor-pointer truncate leading-tight">{user.displayName}</p>
-          </a>
+        </div>
+        <div className="flex-1 min-w-0" onClick={goToProfile}>
+          <p className="font-semibold text-sm hover:underline cursor-pointer truncate leading-tight">{user.displayName}</p>
           <p className="text-xs text-muted-foreground">@{user.username}</p>
           {user.bio && <p className="text-xs text-muted-foreground truncate mt-0.5">{user.bio}</p>}
         </div>
-        <a href={`/#/profile/${user.id}`} className="shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-h-[44px] min-w-[44px] px-3"
-            data-testid={`button-view-friend-${user.id}`}
-          >
-            View
-          </Button>
-        </a>
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-h-[44px] min-w-[44px] px-3 shrink-0"
+          onClick={goToProfile}
+          data-testid={`button-view-friend-${user.id}`}
+        >
+          View
+        </Button>
       </CardContent>
     </Card>
   );
