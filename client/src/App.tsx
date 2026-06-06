@@ -5,18 +5,27 @@ import { queryClient } from "@/lib/queryClient";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import AuthPage from "@/pages/auth";
-import FeedPage from "@/pages/feed";
-import ProfilePage from "@/pages/profile";
-import FriendsPage from "@/pages/friends";
-import NotificationsPage from "@/pages/notifications";
-import SearchPage from "@/pages/search";
-import MessagesPage from "@/pages/messages";
-import NotFound from "@/pages/not-found";
 import AppLayout from "@/components/app-layout";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { CryptoProvider } from "@/lib/cryptoContext";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+
+// Lazy-load all pages so only the current route's code is fetched
+const AuthPage         = lazy(() => import("@/pages/auth"));
+const FeedPage         = lazy(() => import("@/pages/feed"));
+const ProfilePage      = lazy(() => import("@/pages/profile"));
+const FriendsPage      = lazy(() => import("@/pages/friends"));
+const NotificationsPage = lazy(() => import("@/pages/notifications"));
+const SearchPage       = lazy(() => import("@/pages/search"));
+const MessagesPage     = lazy(() => import("@/pages/messages"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function RedirectToHome() {
   const [, navigate] = useLocation();
@@ -43,21 +52,27 @@ function AppRouter() {
   }
 
   if (!user) {
-    return <AuthPage />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <AuthPage />
+      </Suspense>
+    );
   }
 
   return (
     <AppLayout>
-      <Switch>
-        <Route path="/" component={FeedPage} />
-        <Route path="/profile/:id" component={ProfilePage} />
-        <Route path="/friends" component={FriendsPage} />
-        <Route path="/notifications" component={NotificationsPage} />
-        <Route path="/search" component={SearchPage} />
-        <Route path="/messages" component={MessagesPage} />
-        {/* Redirect any unknown path (including /auth) back to feed */}
-        <Route component={RedirectToHome} />
-      </Switch>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={FeedPage} />
+          <Route path="/profile/:id" component={ProfilePage} />
+          <Route path="/friends" component={FriendsPage} />
+          <Route path="/notifications" component={NotificationsPage} />
+          <Route path="/search" component={SearchPage} />
+          <Route path="/messages" component={MessagesPage} />
+          {/* Redirect any unknown path (including /auth) back to feed */}
+          <Route component={RedirectToHome} />
+        </Switch>
+      </Suspense>
     </AppLayout>
   );
 }
